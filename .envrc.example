@@ -1,0 +1,13 @@
+# direnv 模板。用法：
+#   cp .envrc.example .envrc   # .envrc 已被 gitignore
+#   在 .envrc 中填入真实 key
+#   direnv allow
+#
+# 本项目通过 Anthropic 官方 SDK 访问 DeepSeek 的 Anthropic 兼容端点，
+# 端点与鉴权全部由环境变量提供，代码中不含任何 provider 配置。
+
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+export ANTHROPIC_AUTH_TOKEN=sk-在此填入你的-DeepSeek-key
+
+# 注意：不要同时设置 ANTHROPIC_API_KEY，
+# 两者并存时 SDK 会同时发送两个认证头，API 将拒绝请求。
