@@ -8,13 +8,16 @@
 本项目通过手写一个 Java 版简易 Claude Code 来学习 coding agent 的构造，参考课程 <https://learn.shareai.run/zh>（Python
 实现，20 课递进）。
 
-课程的核心数据结构是一个 **sum type 流**：
+课程的核心数据结构是一个 **sum type 流**。原决策时把它简化为：
 
 - API 返回的 content block 只可能是 `text` / `tool_use` / `thinking` 之一
 - `stop_reason` 只可能是 `end_turn` / `tool_use` / `max_tokens` 之一
 
-Python 用 dict 承载，靠 `block["type"] == "tool_use"` 做字符串判别——类型信息只活在字符串里，漏一个分支要到运行时才暴露。整个
-agent loop 就是在对这些变体反复分派，因此 **如何建模这个 sum type 决定了整个项目的代码质量**。
+Python 用 dict 承载，靠 `block["type"] == "tool_use"` 做字符串判别——类型信息只活在字符串里，漏一个分支要到运行时才暴露。
+
+后续核查 `anthropic-java 2.53.0` 发现，SDK 已提供带未知变体处理的 content-block 联合类型和 stop-reason 包装，实际变体也多于上述三种。
+因此 ADR-0002 已决定复用 SDK 协议类型，而不是为外部协议重复建立 sealed 层级。Java 21 仍作为项目下限：后续 harness 自有状态机可使用
+record、sealed type 和穷尽 switch，虚拟线程也服务于后半课程的并发机制。
 
 ## 决策
 
@@ -50,7 +53,6 @@ agent loop 就是在对这些变体反复分派，因此 **如何建模这个 su
 - 语言版本下限 21，上限不限（25 等更新 LTS 亦可）。
 - 本机 `java` 命令为 Homebrew JDK 26，而 `JAVA_HOME` 指向 SDKMAN Zulu 21，Maven 运行在 21 上。 **统一用 `mvn` 执行，不使用裸
   `java` 命令**，避免编译期与运行期版本不一致。
-- 项目通过 Anthropic 兼容端点运行，必须显式提供 `anthropic.baseUrl` 或 `ANTHROPIC_BASE_URL`。缺失时启动失败，禁止静默回退到
-  SDK 默认的 Anthropic 官方端点，以免 shell、IDE 等启动环境差异被远端鉴权错误掩盖。
-- content block 的具体建模方案（sealed 层级如何划分、与 SDK 自带类型的边界在哪）尚未决定，留待专门审议后另立 ADR。本 ADR
-  只锁定语言版本，不锁定建模方案。
+- `ANTHROPIC_BASE_URL` 是可选配置：提供时使用 Anthropic 兼容端点，缺失时沿用 SDK 默认的 Anthropic 官方端点。这样与课程基线保持
+  功能对等；具体端点仍应由启动环境明确管理，鉴权或端点配置错误直接暴露，不做 fallback。
+- content block 与 SDK 类型的边界见 ADR-0002：外部协议复用 SDK 类型，模型调用处建立可替换接缝。

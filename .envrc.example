@@ -7,7 +7,5 @@
 # 端点与鉴权全部由环境变量提供，代码中不含任何 provider 配置。
 
 export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
-export ANTHROPIC_AUTH_TOKEN=sk-在此填入你的-DeepSeek-key
-
-# 注意：不要同时设置 ANTHROPIC_API_KEY，
-# 两者并存时 SDK 会同时发送两个认证头，API 将拒绝请求。
+export ANTHROPIC_API_KEY=sk-在此填入你的-DeepSeek-key
+export MODEL_ID=deepseek-v4-flash

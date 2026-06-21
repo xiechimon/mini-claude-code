@@ -2,38 +2,56 @@ package com.xmon.nanoagent;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.models.messages.Message;
-import com.anthropic.models.messages.MessageCreateParams;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 
-/**
- * 冒烟验证：确认 SDK、鉴权、网络三者贯通。
- * 从 s01 开始，本类将被真正的 agent loop 取代。
- * <p>
- * 端点与鉴权全部由外部配置提供，代码不含任何 provider 配置：
- * anthropic.baseUrl / ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN。
- */
+import java.io.PrintWriter;
+import java.nio.file.Path;
+
 public final class Main {
 
-    private static final String MODEL = "deepseek-v4-flash";
+    private Main() {
+    }
 
-    public static void main(String[] args) {
-        String baseUrl = System.getProperty("anthropic.baseUrl", System.getenv("ANTHROPIC_BASE_URL"));
-        if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("ANTHROPIC_BASE_URL 未配置，拒绝使用 Anthropic 默认端点");
+    public static void main(String[] args) throws Exception {
+        Path workingDirectory = Path.of("").toAbsolutePath().normalize();
+        EffectiveEnvironment environment = EffectiveEnvironment.load(workingDirectory, System.getenv());
+        String modelId = environment.require("MODEL_ID");
+        AnthropicClient client = createClient(environment);
+
+        try (Terminal terminal = TerminalBuilder.builder().system(true).build()) {
+            PrintWriter output = terminal.writer();
+            LineReader input = LineReaderBuilder.builder().terminal(terminal).build();
+            BashTool bashTool = BashTool.production(workingDirectory, environment.values());
+            ModelClient modelClient = client.messages()::create;
+            AgentLoop agentLoop = new AgentLoop(modelClient, bashTool, modelId, workingDirectory, output);
+            new Repl(input, output, agentLoop).run();
+        } finally {
+            client.close();
+        }
+    }
+
+    private static AnthropicClient createClient(EffectiveEnvironment environment) {
+        String apiKey = environment.get("ANTHROPIC_API_KEY");
+        String authToken = environment.get("ANTHROPIC_AUTH_TOKEN");
+        if (apiKey == null && authToken == null) {
+            throw new IllegalStateException(
+                    "Missing required environment variable: ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN");
         }
 
-        AnthropicClient client = AnthropicOkHttpClient.fromEnv();
-
-        MessageCreateParams params = MessageCreateParams.builder()
-                .model(MODEL)
-                .maxTokens(1024L)
-                .addUserMessage("用一句中文回答：你在线吗？")
-                .build();
-
-        Message response = client.messages().create(params);
-
-        response.content().stream()
-                .flatMap(block -> block.text().stream())
-                .forEach(text -> System.out.println(text.text()));
+        AnthropicOkHttpClient.Builder builder = AnthropicOkHttpClient.builder();
+        String baseUrl = environment.get("ANTHROPIC_BASE_URL");
+        if (baseUrl != null) {
+            builder.baseUrl(baseUrl);
+        }
+        if (apiKey != null) {
+            builder.apiKey(apiKey);
+        }
+        if (authToken != null) {
+            builder.authToken(authToken);
+        }
+        return builder.build();
     }
 }
