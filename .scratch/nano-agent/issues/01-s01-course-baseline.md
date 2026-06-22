@@ -2,7 +2,7 @@
 
 Type: research
 
-Status: ready-for-agent
+Status: ready-for-human
 
 > 结论：s01 的完整运行时范围是一个持久会话 REPL、一个 `bash` 工具、一个非流式 Messages API
 > 工具循环，以及教学用途的轻量命令执行边界。本文只记录网站当前版本的事实、行为和验收标准；不包含任何 Java 方案，也不把后续课次或“深入
@@ -392,3 +392,10 @@ s01
   `anthropic.apiKey`、`anthropic.authToken`、`anthropic.baseUrl` 等 JVM system property 纳入项目配置契约，所有配置只来自继承环境
   与向上查找到的首个 `.env`，统一由 `EffectiveEnvironment` 定义。
 - 2026-08-10：用户确认完整 Java 映射共识；设计 frontier 已清空，课程票转为 `ready-for-agent`，后续可按已确认方案进入功能对等实现。
+- 2026-08-10：实现时进一步澄清第八、九轮组合语义：`ANTHROPIC_BASE_URL` 的值不做 trim 或 blank 归一化，键存在即把原始值显式传给
+  SDK；只有原始值非空时才按课程源码移除 `ANTHROPIC_AUTH_TOKEN`。因此显式 blank 不等同于配置缺失，若 SDK 拒绝空 URL，错误应直接
+  暴露；这不是回退到官方端点的信号。
+- 2026-08-10：s01 功能对等实现提交为 `fc4324b`。`mvn verify` 通过 40 项自动测试，覆盖 Effective Environment、Bash Tool、Agent
+  Loop、REPL 及官网三个端到端示例。双轴审查结果：Standards 无硬违规，保留两处局部输出/Unicode 逻辑与测试 fixture 重复，以免为 s01
+  引入浅工具 Module；Spec 报告的 blank Base URL 建议与用户已确认的“保留原始 blank”决策冲突，故记录为非问题。课程票转为
+  `ready-for-human`，等待用户 Debug；Debug 确认前不进入 s02。
