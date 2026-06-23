@@ -57,6 +57,9 @@ Conventional Commits，中文祈使句，不加句号：
 
 type：`feat` / `fix` / `docs` / `refactor` / `test` / `chore`；scope 可省略。
 
+scope 仅表示项目中长期稳定的功能范围，例如 `desktop`、`sdk`、`mcp`。课程编号、issue 编号、迭代名称不得作为 scope，也不应为了标识
+进度写入 subject。没有明确功能范围时省略 scope，subject 只描述实际代码或文档变化。
+
 默认只写 subject 一行。不加 body（除非改动原因无法从 diff 看出）、不加 `Co-Authored-By` 等 trailer、不加额外 commentary。
 
 ## 学习循环 📖
