@@ -379,11 +379,11 @@ s01
   `get()` 结果；从 working directory 向上查找首个 `.env`，缺失忽略，畸形内容直接失败。接受并记录不支持 `${VAR}` 展开和完整
   python-dotenv grammar 的 Python 特有差异。尚未授权实现。
 - 2026-08-10：Java 映射 Grill 第七轮达成共识：课程对等优先，配置模板从 Base URL + auth token 迁移为
-  `ANTHROPIC_API_KEY`，真实 `.envrc` 属于用户私有配置，不自动修改；新增并忽略 `.env`，同时保留声明相同配置的 `.env.example` 与
-  `.envrc.example`。`Main` 是 composition root，负责捕获 cwd、加载 Effective Environment、构造 SDK、创建并关闭 JLine Terminal，
+  `ANTHROPIC_API_KEY`；新增并忽略 `.env`，以 `.env.example` 声明相同配置。`Main` 是 composition root，负责捕获 cwd、加载
+  Effective Environment、构造 SDK、创建并关闭 JLine Terminal，
   再装配各 Module。`AgentLoop` 构造 Interface 显式接收 `ModelClient`、`BashTool`、model ID、working directory 和
   `PrintWriter`，不增加 settings 包装。尚未授权实现。
-- 2026-08-10：Java 映射 Grill 第八轮达成共识：配置值不 trim、不把 blank 归一化为缺失，保持网站的原始字符串语义；两个模板延续
+- 2026-08-10：Java 映射 Grill 第八轮达成共识：配置值不 trim、不把 blank 归一化为缺失，保持网站的原始字符串语义；`.env.example` 延续
   DeepSeek 兼容端点与 `deepseek-v4-flash` 示例，但使用 API key 占位符。等待 Bash 时线程中断会先强制终止并等待直接 shell
   进程，再重新抛出 `InterruptedException`，不扩展为进程树治理。所有关键终端输出 flush 后检查 `PrintWriter.checkError()`，写入失败
   直接抛错，不静默吞掉。尚未授权实现。
@@ -395,6 +395,9 @@ s01
 - 2026-08-10：实现时进一步澄清第八、九轮组合语义：`ANTHROPIC_BASE_URL` 的值不做 trim 或 blank 归一化，键存在即把原始值显式传给
   SDK；只有原始值非空时才按课程源码移除 `ANTHROPIC_AUTH_TOKEN`。因此显式 blank 不等同于配置缺失，若 SDK 拒绝空 URL，错误应直接
   暴露；这不是回退到官方端点的信号。
+- 2026-08-10：使用真实 `.env` 与注入的继承环境完成覆盖验证：`.env` 中的 `ANTHROPIC_BASE_URL` 能覆盖进程同名变量，非空自定义
+  Base URL 仍会移除继承的 `ANTHROPIC_AUTH_TOKEN`。因此配置入口收敛为 `.env`，删除重复保存凭据的 `.envrc`、`.envrc.example`
+  及 direnv 专用说明，避免双配置源漂移；该清理容易恢复，不单独建立 ADR。
 - 2026-08-10：s01 功能对等实现提交为 `fc4324b`。`mvn verify` 通过 40 项自动测试，覆盖 Effective Environment、Bash Tool、Agent
   Loop、REPL 及官网三个端到端示例。双轴审查结果：Standards 无硬违规，保留两处局部输出/Unicode 逻辑与测试 fixture 重复，以免为 s01
   引入浅工具 Module；Spec 报告的 blank Base URL 建议与用户已确认的“保留原始 blank”决策冲突，故记录为非问题。课程票转为

@@ -104,12 +104,6 @@ scope 仅表示项目中长期稳定的功能范围，例如 `desktop`、`sdk`�
 本机 `java` 为 JDK 26，Maven 运行在 JDK 21。 **一律用 `mvn` 编译与运行，不使用裸 `java` 命令**，避免编译期与运行期版本不一致。详见
 `docs/adr/0001-技术栈-java21-maven-官方sdk.md`。
 
-需要让 IntelliJ 继承当前 fish / direnv 环境时，使用以下命令静默启动：
-
-```fish
-idea . >/dev/null 2>&1 &; disown
-```
-
 ## Agent skills
 
 - **Issue tracker** —— issues 与 spec 以 markdown 存放在 `.scratch/<feature-slug>/`。见 `docs/agents/issue-tracker.md`。
