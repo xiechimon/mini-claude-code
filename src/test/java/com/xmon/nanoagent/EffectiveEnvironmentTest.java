@@ -12,6 +12,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * 测试环境变量加载
+ */
 final class EffectiveEnvironmentTest {
 
     @TempDir

@@ -29,6 +29,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 测试命令行交互
+ */
 final class ReplTest {
 
     @TempDir

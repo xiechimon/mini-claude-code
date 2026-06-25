@@ -17,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 测试 Bash 命令执行
+ */
 final class BashToolTest {
 
     @TempDir

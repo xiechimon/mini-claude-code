@@ -25,6 +25,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 测试真实模型的工具调用流程
+ */
 final class AgentLoopEndToEndTest {
 
     @TempDir

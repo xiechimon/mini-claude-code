@@ -10,11 +10,23 @@ import org.jline.terminal.TerminalBuilder;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 
+/**
+ * 启动命令行智能体
+ */
 public final class Main {
 
+    /**
+     * 禁止实例化
+     */
     private Main() {
     }
 
+    /**
+     * 启动程序
+     *
+     * @param args 命令行参数
+     * @throws Exception 初始化或运行失败
+     */
     public static void main(String[] args) throws Exception {
         Path workingDirectory = Path.of("").toAbsolutePath().normalize();
         EffectiveEnvironment environment = EffectiveEnvironment.load(workingDirectory, System.getenv());
@@ -33,6 +45,13 @@ public final class Main {
         }
     }
 
+    /**
+     * 创建模型客户端
+     *
+     * @param environment 环境变量
+     * @return 模型客户端
+     * @throws IllegalStateException 未配置认证信息
+     */
     private static AnthropicClient createClient(EffectiveEnvironment environment) {
         String apiKey = environment.get("ANTHROPIC_API_KEY");
         String authToken = environment.get("ANTHROPIC_AUTH_TOKEN");
