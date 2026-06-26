@@ -2,7 +2,7 @@
 
 Type: research
 
-Status: ready-for-human
+Status: resolved
 
 > 结论：s01 的完整运行时范围是一个持久会话 REPL、一个 `bash` 工具、一个非流式 Messages API
 > 工具循环，以及教学用途的轻量命令执行边界。本文只记录网站当前版本的事实、行为和验收标准；不包含任何 Java 方案，也不把后续课次或“深入
@@ -402,3 +402,21 @@ s01
   Loop、REPL 及官网三个端到端示例。双轴审查结果：Standards 无硬违规，保留两处局部输出/Unicode 逻辑与测试 fixture 重复，以免为 s01
   引入浅工具 Module；Spec 报告的 blank Base URL 建议与用户已确认的“保留原始 blank”决策冲突，故记录为非问题。课程票转为
   `ready-for-human`，等待用户 Debug；Debug 确认前不进入 s02。
+
+### Debug 验收与对照复盘
+
+- 2026-08-10：用户完成关键路径 Debug 并能复述运行机制：先取得继承环境，再以 `.env` 同名项覆盖；JLine 读取输入后交给
+  `AgentLoop.respond`，输入作为 user message 加入持久 History；每个 `tool_use` 解码出 Bash 命令并顺序执行，输出连同对应 Tool ID
+  包装为 `tool_result`，所有结果合并进同一条 user message 回填；未调用工具时返回文本并结束当前 Turn，调用工具时继续请求直至得到最终
+  响应。补充边界：Java 不修改 JVM 的 `System.getenv()`，而是构造不可变 Effective Environment，并显式传给 SDK 与 Bash 子进程。
+- Python 的 `load_dotenv(override=True)` 通过修改进程环境实现覆盖；Java 受 JVM 环境不可变约束，使用 `EffectiveEnvironment` 快照表达相同的
+  项目配置语义。该差异隔离在 composition root，不泄漏进 Agent Loop。
+- Python 使用动态字典和 content block；Java 复用官方 SDK 的 `MessageParam`、`ContentBlock`、`ToolUseBlock` 与
+  `ToolResultBlockParam`，并在 API 响应 `Message` 与请求 History 之间显式调用 `toParam()`，获得类型安全且保持协议形状。
+- Python 依赖终端输入/readline 行为；Java 使用 JLine 明确承载行编辑、EOF、Ctrl-C、ANSI 和 Unicode 宽度行为。两者都维持同一个进程内的
+  多 Turn History，不做落盘持久化。
+- Python 以 `subprocess.run(shell=True)` 执行 POSIX shell；Java 显式启动 `/bin/sh -c`，并发消费 stdout/stderr，超时后强制终止直接
+  shell 进程。Java 额外按 Unicode code point 实现 50,000 字符结果与 200 字符预览截断，以避免 UTF-16 截断代理对。
+- 两端均按响应顺序执行一个 assistant Turn 内的全部工具调用，将全部 `tool_result` 放进紧随其后的同一个 user message；错误仍作为普通
+  Tool Result 文本回填，不设置 `is_error`，循环不设置最大轮数。这些是课程行为，不提前扩展并发执行、审批、进程树治理或持久化会话。
+- Debug、对照复盘与沉淀均已完成，本课程状态转为 `resolved`；后续可以进入下一课的课程基线研究。
