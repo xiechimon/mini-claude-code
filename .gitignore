@@ -7,8 +7,12 @@ target/
 # CodeGraph 索引产物
 .codegraph/
 
-# Claude Code 本地设置（含个人权限配置，不入库）
-.claude/settings.local.json
+# 本地 Agent 与 Claude Code 配置（不入库）
+.agents/
+.claude/
+
+# Playwright MCP 本地会话产物（截图、快照）
+.playwright-mcp/
 
 # IDE
 .idea/
