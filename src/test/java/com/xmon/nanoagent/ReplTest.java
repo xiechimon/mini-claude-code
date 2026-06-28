@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Proxy;
@@ -38,7 +39,7 @@ final class ReplTest {
     Path workingDirectory;
 
     @Test
-    void ordinaryInputIsPreservedAndFinalTextBlocksArePrintedInOrder() throws InterruptedException {
+    void ordinaryInputIsPreservedAndFinalTextBlocksArePrintedInOrder() throws Exception {
         FakeModelClient model = new FakeModelClient(message(text("first"), text("second")));
         StubLineReader input = new StubLineReader("  keep spaces  ", " q ");
         StringWriter output = new StringWriter();
@@ -47,9 +48,9 @@ final class ReplTest {
         repl.run();
 
         assertEquals("  keep spaces  ", model.requests.getFirst().messages().getFirst().content().asString());
-        assertEquals(List.of("\033[36ms01 >> \033[0m", "\033[36ms01 >> \033[0m"), input.prompts);
+        assertEquals(List.of("\033[36ms02 >> \033[0m", "\033[36ms02 >> \033[0m"), input.prompts);
         assertEquals("""
-                s01: Agent Loop
+                s02: Tool Use — 在 s01 基础上加了 4 个工具
                 输入问题，回车发送。输入 q 退出。
 
                 first
@@ -60,7 +61,7 @@ final class ReplTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", "   ", "q", " Q ", "exit", " ExIt "})
-    void blankAndExitWordsStopWithoutCallingTheModel(String query) throws InterruptedException {
+    void blankAndExitWordsStopWithoutCallingTheModel(String query) throws Exception {
         FakeModelClient model = new FakeModelClient();
         StubLineReader input = new StubLineReader(query);
         StringWriter output = new StringWriter();
@@ -72,7 +73,7 @@ final class ReplTest {
     }
 
     @Test
-    void endOfFileStopsWithoutEscaping() {
+    void endOfFileStopsWithoutEscaping() throws Exception {
         FakeModelClient model = new FakeModelClient();
         StubLineReader input = new StubLineReader(new EndOfFileException());
         StringWriter output = new StringWriter();
@@ -83,7 +84,7 @@ final class ReplTest {
     }
 
     @Test
-    void userInterruptStopsWithoutEscaping() {
+    void userInterruptStopsWithoutEscaping() throws Exception {
         FakeModelClient model = new FakeModelClient();
         StubLineReader input = new StubLineReader(new UserInterruptException("partial"));
         StringWriter output = new StringWriter();
@@ -93,10 +94,12 @@ final class ReplTest {
         assertEquals(0, model.requests.size());
     }
 
-    private AgentLoop agentLoop(FakeModelClient model, StringWriter output) {
+    private AgentLoop agentLoop(FakeModelClient model, StringWriter output) throws IOException {
         return new AgentLoop(
                 model,
-                new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(2)),
+                new ToolRegistry(
+                        new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(2)),
+                        new Workspace(workingDirectory)),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(output));

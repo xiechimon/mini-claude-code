@@ -14,7 +14,7 @@ import java.util.Objects;
  */
 final class Repl {
 
-    private static final String PROMPT = "\033[36ms01 >> \033[0m";
+    private static final String PROMPT = "\033[36ms02 >> \033[0m";
 
     private final LineReader input;
     private final PrintWriter output;
@@ -39,7 +39,7 @@ final class Repl {
      * @throws InterruptedException 工具执行被中断
      */
     void run() throws InterruptedException {
-        writeLine("s01: Agent Loop");
+        writeLine("s02: Tool Use — 在 s01 基础上加了 4 个工具");
         writeLine("输入问题，回车发送。输入 q 退出。");
         writeLine("");
 

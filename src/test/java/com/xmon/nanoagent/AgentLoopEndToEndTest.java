@@ -12,6 +12,7 @@ import com.anthropic.models.messages.Usage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -79,28 +80,102 @@ final class AgentLoopEndToEndTest {
         assertEquals("course-branch", toolResultSentToSecondRequest(model));
     }
 
-    private AgentLoop loop(FakeModelClient model) {
+    @Test
+    void modelCanReadTheReadmeAndContinueWithTheToolResult() throws Exception {
+        Files.writeString(workingDirectory.resolve("README.md"), "# Nano Agent\n一个学习项目。\n");
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.TOOL_USE, toolUse("read", "read_file", Map.of("path", "README.md"))),
+                finalAnswer("这是一个学习项目"));
+
+        assertEquals(List.of("这是一个学习项目"), loop(model).respond(
+                "Read the file README.md and tell me what this project is about"));
+
+        assertEquals("# Nano Agent\n一个学习项目。", toolResultSentToSecondRequest(model));
+    }
+
+    @Test
+    void modelCanWriteTestPythonAndReadItBack() throws Exception {
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.TOOL_USE, toolUse(
+                        "write", "write_file", Map.of("path", "test.py", "content", "print(\"hello\")\n"))),
+                message(StopReason.TOOL_USE, toolUse("read", "read_file", Map.of("path", "test.py"))),
+                finalAnswer("done"));
+
+        loop(model).respond("Create a file called test.py that prints \"hello\", then read it back");
+
+        assertEquals("print(\"hello\")\n", Files.readString(workingDirectory.resolve("test.py")));
+        assertEquals(List.of("Wrote 15 bytes to test.py"), toolResultsAt(model, 1, 2));
+        assertEquals(List.of("print(\"hello\")"), toolResultsAt(model, 2, 4));
+    }
+
+    @Test
+    void modelCanFindPythonFilesWithGlob() throws Exception {
+        Files.writeString(workingDirectory.resolve("a.py"), "");
+        Files.writeString(workingDirectory.resolve("b.py"), "");
+        Files.writeString(workingDirectory.resolve("notes.txt"), "");
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.TOOL_USE, toolUse("find", "glob", Map.of("pattern", "*.py"))),
+                finalAnswer("found two"));
+
+        loop(model).respond("Find all Python files in this directory");
+
+        assertEquals(
+                List.of("a.py", "b.py"),
+                Arrays.stream(toolResultSentToSecondRequest(model).split("\n")).sorted().toList());
+    }
+
+    @Test
+    void modelCanReadTwoFilesInOneTurnAndThenWriteASummary() throws Exception {
+        Files.writeString(workingDirectory.resolve("README.md"), "readme body");
+        Files.writeString(workingDirectory.resolve("requirements.txt"), "anthropic");
+        FakeModelClient model = new FakeModelClient(
+                message(
+                        StopReason.TOOL_USE,
+                        toolUse("read-1", "read_file", Map.of("path", "README.md")),
+                        toolUse("read-2", "read_file", Map.of("path", "requirements.txt"))),
+                message(StopReason.TOOL_USE, toolUse(
+                        "write", "write_file", Map.of("path", "summary.md", "content", "readme body + anthropic"))),
+                finalAnswer("summarised"));
+
+        loop(model).respond("Read both README.md and requirements.txt, then create a summary file");
+
+        // 同一个 assistant 轮的两个 Tool Call 按响应顺序执行，结果放进紧随其后的同一条 user 消息。
+        assertEquals(List.of("readme body", "anthropic"), toolResultsAt(model, 1, 2));
+        assertEquals("readme body + anthropic", Files.readString(workingDirectory.resolve("summary.md")));
+    }
+
+    private AgentLoop loop(FakeModelClient model) throws IOException {
         return new AgentLoop(
                 model,
-                BashTool.production(workingDirectory, System.getenv()),
+                new ToolRegistry(
+                        BashTool.production(workingDirectory, System.getenv()),
+                        new Workspace(workingDirectory)),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(new StringWriter()));
     }
 
     private static String toolResultSentToSecondRequest(FakeModelClient model) {
-        return model.requests.get(1).messages().get(2).content().asBlockParams().getFirst()
-                .toolResult().orElseThrow().content().orElseThrow().asString();
+        return toolResultsAt(model, 1, 2).getFirst();
+    }
+
+    private static List<String> toolResultsAt(FakeModelClient model, int requestIndex, int messageIndex) {
+        return model.requests.get(requestIndex).messages().get(messageIndex).content().asBlockParams().stream()
+                .map(block -> block.toolResult().orElseThrow().content().orElseThrow().asString())
+                .toList();
     }
 
     private static Message toolRequest(String command) {
-        ToolUseBlock toolUse = ToolUseBlock.builder()
-                .id("tool-call")
+        return message(StopReason.TOOL_USE, toolUse("tool-call", "bash", Map.of("command", command)));
+    }
+
+    private static ContentBlock toolUse(String id, String name, Map<String, String> input) {
+        return ContentBlock.ofToolUse(ToolUseBlock.builder()
+                .id(id)
                 .caller(DirectCaller.builder().build())
-                .input(JsonValue.from(Map.of("command", command)))
-                .name("bash")
-                .build();
-        return message(StopReason.TOOL_USE, ContentBlock.ofToolUse(toolUse));
+                .input(JsonValue.from(input))
+                .name(name)
+                .build());
     }
 
     private static Message finalAnswer(String answer) {

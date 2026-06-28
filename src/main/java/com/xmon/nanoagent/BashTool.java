@@ -1,8 +1,11 @@
 package com.xmon.nanoagent;
 
+import com.anthropic.core.JsonValue;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -16,8 +19,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 执行 Bash 命令
+ *
+ * <p>不受 {@link Workspace} 约束：命令能触及的范围只由下面的 denylist 限制。
  */
-final class BashTool {
+final class BashTool implements ToolHandler {
 
     private static final List<String> DENIED_SUBSTRINGS = List.of(
             "rm -rf /",
@@ -58,6 +63,19 @@ final class BashTool {
         if (timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must be positive");
         }
+    }
+
+    /**
+     * 解码工具输入后执行命令
+     *
+     * @param input 模型给出的工具输入
+     * @return 命令输出或错误信息
+     * @throws InterruptedException 当前线程被中断
+     */
+    @Override
+    public String execute(JsonValue input) throws InterruptedException {
+        // 解码不设错误边界：输入形状错误必须直接暴露，而不是变成一条 Tool Result。
+        return execute(input.convert(BashInput.class).command());
     }
 
     /**
@@ -127,11 +145,12 @@ final class BashTool {
      * 读取输入流的全部内容
      *
      * @param stream 输入流
-     * @return 使用系统默认字符集解码的文本
+     * @return 以 UTF-8 解码的文本，非法字节替换为 U+FFFD
      * @throws IOException 读取失败
      */
     private static String read(InputStream stream) throws IOException {
-        return new String(stream.readAllBytes(), Charset.defaultCharset());
+        // 固定 UTF-8 并替换非法字节，使子进程输出不会因编码问题失败。
+        return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
     }
 
     /**
@@ -222,6 +241,23 @@ final class BashTool {
             process.getErrorStream().close();
         } catch (IOException ignored) {
             // 进程已经结束，此处关闭流只为释放阻塞的读取任务。
+        }
+    }
+
+    /**
+     * 接收模型生成的 Bash 工具输入
+     *
+     * @param command 命令文本
+     */
+    private record BashInput(@JsonProperty("command") String command) {
+
+        /**
+         * 校验工具输入
+         *
+         * @param command 命令文本
+         */
+        private BashInput {
+            Objects.requireNonNull(command, "command");
         }
     }
 }

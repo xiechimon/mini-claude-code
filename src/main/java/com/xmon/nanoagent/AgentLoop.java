@@ -1,23 +1,20 @@
 package com.xmon.nanoagent;
 
-import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.ContentBlock;
 import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.StopReason;
-import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
 import com.anthropic.models.messages.ToolUseBlock;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 处理模型对话和工具调用
@@ -28,10 +25,9 @@ final class AgentLoop {
     private static final int MAX_PREVIEW_CODE_POINTS = 200;
     private static final String YELLOW = "\033[33m";
     private static final String RESET = "\033[0m";
-    private static final Tool BASH_DEFINITION = createBashDefinition();
 
     private final ModelClient modelClient;
-    private final BashTool bashTool;
+    private final ToolRegistry toolRegistry;
     private final String modelId;
     private final String systemPrompt;
     private final PrintWriter terminal;
@@ -41,22 +37,22 @@ final class AgentLoop {
      * 创建智能体循环
      *
      * @param modelClient 模型客户端
-     * @param bashTool Bash 命令工具
+     * @param toolRegistry 工具注册表
      * @param modelId 模型标识
      * @param workingDirectory 工作目录
      * @param terminal 终端输出
      */
     AgentLoop(
             ModelClient modelClient,
-            BashTool bashTool,
+            ToolRegistry toolRegistry,
             String modelId,
             Path workingDirectory,
             PrintWriter terminal) {
         this.modelClient = Objects.requireNonNull(modelClient);
-        this.bashTool = Objects.requireNonNull(bashTool);
+        this.toolRegistry = Objects.requireNonNull(toolRegistry);
         this.modelId = Objects.requireNonNull(modelId);
         this.systemPrompt = "You are a coding agent at " + Objects.requireNonNull(workingDirectory)
-                + ". Use bash to solve tasks. Act, don't explain.";
+                + ". Use tools to solve tasks. Act, don't explain.";
         this.terminal = Objects.requireNonNull(terminal);
     }
 
@@ -87,18 +83,16 @@ final class AgentLoop {
                         .toList();
             }
 
-            // 如果模型调用了工具，则执行工具并将结果添加到 history
+            // 如果模型调用了工具，则按工具名查表执行并将结果添加到 history
             List<ContentBlockParam> results = new ArrayList<>();
             for (ContentBlock block : response.content()) {
                 if (block.toolUse().isEmpty()) {
                     continue;
                 }
                 ToolUseBlock toolUse = block.toolUse().orElseThrow();
-                BashInput input = toolUse._input().convert(BashInput.class);
-                String command = input.command();
 
-                writeLine(YELLOW + "$ " + command + RESET);
-                String output = bashTool.execute(command);
+                writeLine(YELLOW + "> " + toolUse.name() + RESET);
+                String output = execute(toolUse);
                 writeLine(prefixByCodePoint(output, MAX_PREVIEW_CODE_POINTS));
 
                 results.add(ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
@@ -115,18 +109,34 @@ final class AgentLoop {
     }
 
     /**
+     * 按工具名分发一次工具调用
+     *
+     * @param toolUse 模型发起的工具调用
+     * @return 工具返回值，工具名未注册时为 {@code Unknown: } 加工具名
+     * @throws InterruptedException 工具执行被中断
+     */
+    private String execute(ToolUseBlock toolUse) throws InterruptedException {
+        Optional<ToolHandler> handler = toolRegistry.handler(toolUse.name());
+        // 未注册的工具名不是错误：结果照常回填，循环继续。
+        if (handler.isEmpty()) {
+            return "Unknown: " + toolUse.name();
+        }
+        return handler.get().execute(toolUse._input());
+    }
+
+    /**
      * 创建包含完整对话历史的模型请求
      *
      * @return 模型请求参数
      */
     private MessageCreateParams createRequest() {
-        return MessageCreateParams.builder()
+        MessageCreateParams.Builder request = MessageCreateParams.builder()
                 .model(modelId)
                 .system(systemPrompt)
                 .messages(history)
-                .addTool(BASH_DEFINITION)
-                .maxTokens(MAX_TOKENS)
-                .build();
+                .maxTokens(MAX_TOKENS);
+        toolRegistry.definitions().forEach(request::addTool);
+        return request.build();
     }
 
     /**
@@ -155,42 +165,5 @@ final class AgentLoop {
             return value;
         }
         return value.substring(0, value.offsetByCodePoints(0, maximumCodePoints));
-    }
-
-    /**
-     * 创建 Bash 工具定义
-     *
-     * @return Bash 工具定义
-     */
-    private static Tool createBashDefinition() {
-        Tool.InputSchema.Properties properties = Tool.InputSchema.Properties.builder()
-                .putAdditionalProperty("command", JsonValue.from(Map.of("type", "string")))
-                .build();
-        return Tool.builder()
-                .name("bash")
-                .description("Run a shell command.")
-                .inputSchema(Tool.InputSchema.builder()
-                        .properties(properties)
-                        .required(List.of("command"))
-                        .build())
-                .build();
-    }
-
-    /**
-     * 接收模型生成的 Bash 工具输入
-     *
-     * @param command 命令文本
-     */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record BashInput(String command) {
-
-        /**
-         * 校验工具输入
-         *
-         * @param command 命令文本
-         */
-        private BashInput {
-            Objects.requireNonNull(command, "command");
-        }
     }
 }

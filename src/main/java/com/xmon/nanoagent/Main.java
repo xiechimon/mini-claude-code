@@ -28,7 +28,8 @@ public final class Main {
      * @throws Exception 初始化或运行失败
      */
     public static void main(String[] args) throws Exception {
-        Path workingDirectory = Path.of("").toAbsolutePath().normalize();
+        // 解析符号链接后捕获一次工作目录，使 system prompt、Bash 子进程和 Workspace 使用同一种路径表示。
+        Path workingDirectory = Path.of("").toAbsolutePath().toRealPath();
         EffectiveEnvironment environment = EffectiveEnvironment.load(workingDirectory, System.getenv());
         String modelId = environment.require("MODEL_ID");
         AnthropicClient client = createClient(environment);
@@ -37,8 +38,9 @@ public final class Main {
             PrintWriter output = terminal.writer();
             LineReader input = LineReaderBuilder.builder().terminal(terminal).build();
             BashTool bashTool = BashTool.production(workingDirectory, environment.values());
+            ToolRegistry toolRegistry = new ToolRegistry(bashTool, new Workspace(workingDirectory));
             ModelClient modelClient = client.messages()::create;
-            AgentLoop agentLoop = new AgentLoop(modelClient, bashTool, modelId, workingDirectory, output);
+            AgentLoop agentLoop = new AgentLoop(modelClient, toolRegistry, modelId, workingDirectory, output);
             new Repl(input, output, agentLoop).run();
         } finally {
             client.close();
