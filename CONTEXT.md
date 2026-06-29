@@ -20,6 +20,10 @@ _Avoid_: Query、Request、Round
 Agent Loop 用来提交 Conversation History 并取得下一条模型消息的协作者。
 _Avoid_: LLM Service、Anthropic Client
 
+**Tool Definition**:
+随每次模型请求发出的工具声明，由工具名、描述和 input schema 组成；与 Tool Handler 是两份互不校验的独立数据。
+_Avoid_: Tool Schema、Tool Spec
+
 **Tool Call**:
 模型消息中要求 harness 调用某个工具的结构化内容块，包含调用 ID、工具名和输入。
 _Avoid_: Command、Function Call
@@ -28,9 +32,17 @@ _Avoid_: Command、Function Call
 harness 执行一次 Tool Call 后产生并以调用 ID 关联回去的结构化内容块。
 _Avoid_: Tool Output、Command Result
 
+**Tool Handler**:
+按 Tool Call 中的工具名查表分发到的工具实现，接收模型给出的原始输入并产生文本 Tool Result。工具名查不到时不构成错误。
+_Avoid_: Tool Executor、Tool Function
+
 **Bash Tool**:
-s01 唯一暴露给模型的工具，在固定工作目录中执行模型给出的 POSIX shell 命令并产生文本 Tool Result。
+在固定工作目录中执行模型给出的 POSIX shell 命令并产生文本 Tool Result 的 Tool Handler；不受 Workspace 约束。
 _Avoid_: Shell Runner、Command Executor
+
+**Workspace**:
+以启动时捕获的工作目录为根的路径边界；负责把模型给出的原始路径解析成区内绝对路径，并判定原始路径解析后是否落在区内。解析包含符号链接。
+_Avoid_: Sandbox、Root Directory
 
 **Effective Environment**:
 由继承的进程变量与 `.env` 声明合并而成、供 agent 集成和所启动工具共同使用的配置视图；同名项以 `.env` 为准。

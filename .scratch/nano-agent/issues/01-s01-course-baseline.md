@@ -420,3 +420,9 @@ s01
 - 两端均按响应顺序执行一个 assistant Turn 内的全部工具调用，将全部 `tool_result` 放进紧随其后的同一个 user message；错误仍作为普通
   Tool Result 文本回填，不设置 `is_error`，循环不设置最大轮数。这些是课程行为，不提前扩展并发执行、审批、进程树治理或持久化会话。
 - Debug、对照复盘与沉淀均已完成，本课程状态转为 `resolved`；后续可以进入下一课的课程基线研究。
+- 2026-08-10（s02 Grill 期间的订正）：第六轮共识中「`BashInput` 忽略额外 JSON 字段，从而保持 Python 版『只读取 command』的行为」
+  这条理由是对 Python 语义的误读。Python 的 `run_bash(block.input["command"])` 之所以只读 `command`，是 s01 硬编码取值的结果；
+  s02 换成 `handler(**block.input)` 后暴露出真实契约——kwargs 展开对多传一个键即抛未捕获 `TypeError` 终止进程。因此
+  `@JsonIgnoreProperties(ignoreUnknown = true)` 实际是在压制一个本应暴露的错误（SDK 的 `JsonMapper` 未关闭 Jackson 默认开启的
+  `FAIL_ON_UNKNOWN_PROPERTIES`）。该注解在 s02 移除，`BashInput` 随之下沉为 `BashTool` 的私有嵌套 record。此处仅订正理由与实现，
+  s01 的其余共识不受影响。
