@@ -14,6 +14,9 @@ target/
 # Playwright MCP 本地会话产物（截图、快照）
 .playwright-mcp/
 
+# Skill 版本锁文件（本地工具生成）
+skills-lock.json
+
 # IDE
 .idea/
 
