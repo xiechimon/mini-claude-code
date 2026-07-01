@@ -713,3 +713,5 @@ s16 Team Protocols、s17 Autonomous Agents、s18 Worktree Isolation、s19 MCP/Pl
   保留三项判断题：四个 file tool 的错误边界模板重复、5 个 `*Input` 紧凑构造器同形、`GlobTool` 的 `workspace.root().getRoot()`，
   依据是 s01「不为本课引入浅 Module」的先例。修复后 `mvn clean verify` 仍通过 84 项测试。
   课程票转为 `ready-for-human`，等待用户 Debug；Debug 确认前不进入 s03。
+- 2026-08-12：学习循环取消「用户 Debug」步骤——CLAUDE.md 已删除该步及「用户未确认 Debug 完成前，不进入下一课」的门禁，
+  循环由 7 步变 6 步。上一条记录的「等待用户 Debug」随之失效，s02 由自动验证与双轴审查直接进入对照复盘与沉淀。
