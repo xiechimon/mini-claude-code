@@ -1,20 +1,25 @@
-# 03 s03 Permission（权限管线）课程基线
+# 03 s03 Permission（权限管线）
 
 Type: research
 
 Status: ready-for-agent
 
-> 结论：s03 在 s02 的运行时上插入一条三闸门权限管线——闸门 1 硬拒绝表（仅 `bash`，7 条子串）、闸门 2 规则匹配（越界路径 /
-> 破坏性命令）、闸门 3 用户审批（`[y/N]` 阻塞输入）；循环里只多了 `if not check_permission(block): continue`，被拦截的调用回填
-> 字面串 `Permission denied.`。但本课**不只是加法**：`safe_path` 被整个删除，工作区边界由「file tool 硬拒绝」降级为「闸门 2
-> 询问用户，批准后可写到工作区外」；`run_bash` 同时失去 s01/s02 的内置 denylist、UTF-8 强制解码与 `OSError` 兜底。本文记录锁定
-> 上游提交下的事实、行为和验收标准；不含 Java 方案，也不把 s04 的 hooks 算进 s03。
+> 结论：**契约层**（`sdk.d.ts`）把权限建模为「模式 + 判定 + 结果」三件套：6 个 `PermissionMode`、3 值
+> `PermissionBehavior`、按 `behavior` 判别的 `PermissionResult`（`deny` 分支**必须**带 `message`，`allow` 分支可改写
+> 工具输入并追加规则）。**参考解法**（课程 `code.py`）把这套压成一条三闸门管线：闸门 1 硬拒绝表（仅 `bash`，7 条子串）、
+> 闸门 2 规则匹配（越界路径 / 破坏性命令）、闸门 3 用户审批（`[y/N]` 阻塞输入）；`check_permission` 返回裸 `bool`，
+> 原因只打终端，模型收到的是字面串 `Permission denied.`。
+>
+> 本课**不只是加法**：`safe_path` 被整个删除，工作区边界由「file tool 硬拒绝」降级为「闸门 2 询问用户，批准后可写到
+> 工作区外」；`run_bash` 同时失去 s01/s02 的内置 denylist、UTF-8 强制解码与 `OSError` 兜底。
+>
+> 本文记录契约事实与参考解法的实测行为；不含 Java 方案，也不把 s04 的 hooks 算进 s03。
 
 ## 研究范围与版本证据
 
-### 基准从官网迁移到上游仓库
+### 官网不能作为基准（证据留档）
 
-本课研究过程中发现**官网不能再作为功能基准**，已按此结论修订 `CLAUDE.md`：
+本课研究过程中发现**官网不能作为功能基准**，已按此结论修订 `CLAUDE.md`：
 
 - 提交 `4d8d420`（2026-07-28T12:23:56Z）标题 `fix(s03): let Gate 2 own the workspace boundary instead of safe_path`
   修改了 `s03_permission/code.py`，但**没有重新生成**构建期产物 `web/src/data/generated/versions.json` 与 `docs.json`。
@@ -25,8 +30,10 @@ Status: ready-for-agent
 - 上游 `main` 已于 2026-08-12 合入 PR #512 `feat/course-v22-refresh`（合并提交 `eb4307f`，其课程内容来自 `ab35e59`），
   重新生成了产物，但站点尚未重新部署。
 
-**本课起锁定上游提交 `eb4307f4e495d2ed22699e1e5682eb55f8076ade`**（`main` 于 2026-08-12T01:47:36Z 的最新提交），
-下文所有链接均指向该提交。
+本文所有课程链接指向研究当时的 `main` 提交 `eb4307f4e495d2ed22699e1e5682eb55f8076ade`（2026-08-12T01:47:36Z），
+用于让下文的哈希与行号可复现。**它不是功能基准**——功能基准是 `.d.ts` 契约，见下文「契约基线」节与
+[ADR-0005](../../../docs/adr/0005-基准从课程功能对等改为契约对齐.md)。课程源码后续演进不需要重新锁定，
+每课直接读当时的 `main` 即可。
 
 ### 改版对已完成课次的影响
 
@@ -41,7 +48,7 @@ Status: ready-for-agent
 | s01 `code.py` | `f0bed0e0…` | `1c3e16ea…` | **仅注释与横幅文案**（中文改英文），零行为变化 |
 | s02 `code.py` | `c2f55dba…` | `21f201d2…` | 同上，零行为变化 |
 
-s01/s02 的行为断言全部继续成立，[01 票](01-s01-course-baseline.md) 与 [02 票](02-s02-tool-use-course-baseline.md)
+s01/s02 的行为断言全部继续成立，[01 票](01-s01-agent-loop.md) 与 [02 票](02-s02-tool-use.md)
 的基线不需要重做。唯一需要同步的是两处**终端文案**（见 2.10）。
 
 ### 本课材料的哈希与口径
@@ -56,6 +63,44 @@ s01/s02 的行为断言全部继续成立，[01 票](01-s01-course-baseline.md) 
 - 上游 17 课的 LOC 序列：s01=102、s02=143、s03=180、s04=202、s05=279、s06=285、s07=285、s08=404、s09=668、s10=420、
   s11=400、s12=638、s13=1523、s14=440、s15=2565、s16=722、s17=790。
 - 本文所有行为结论均由该提交源码的函数体经 AST 原样抽取后在临时工作区实测得到（Python 3.14.7，macOS），未调用模型，不含推测。
+
+## 契约基线（`sdk.d.ts` 的权限模型）
+
+**这一节才是本课的功能基准。** 取法：`npm pack @anthropic-ai/claude-agent-sdk` 解包后读 `package/sdk.d.ts`。
+以下为 `0.3.233` 版原文抽取，非推测。
+
+### 类型与取值（名全录清单）
+
+| 契约类型 | 取值 / 形状 |
+|---|---|
+| `PermissionMode` | `default` \| `acceptEdits` \| `bypassPermissions` \| `plan` \| `dontAsk` \| `auto` |
+| `PermissionBehavior` | `allow` \| `deny` \| `ask` |
+| `PermissionResult` | `{behavior:'allow', updatedInput?, updatedPermissions?, toolUseID?, decisionClassification?}` <br> `\| {behavior:'deny', message, interrupt?, toolUseID?, decisionClassification?}` |
+| `PermissionRuleValue` | `{toolName, ruleContent?}` |
+| `PermissionUpdate` | `addRules` \| `replaceRules` \| `removeRules` \| … ，各带 `{rules, behavior, destination}` |
+| `PermissionUpdateDestination` | `userSettings` \| `projectSettings` \| `localSettings` \| `session` \| `cliArg` |
+| `PermissionDecisionClassification` | `user_temporary` \| `user_permanent` \| `user_reject` |
+| `CanUseTool` | `(toolName, input, {signal, suggestions?, …}) => PermissionResult` —— 宿主可注入的判定回调 |
+
+`HookPermissionDecision`（`allow` / `deny` / `ask` / `defer`）与 `PermissionRequest`、`PermissionDenied` 两个 hook 事件
+同属权限领域，但它们是 **hook 契约**，归 s04 的契约基线，本课不认领。
+
+### 契约与参考解法的差距
+
+`code.py` 是对上表的大幅裁剪。逐项列出，供设计 Grill 逐条裁决「认领名 / 认领行为 / 不做」：
+
+| # | 契约 | `code.py` 的解法 | 性质 |
+|---|---|---|---|
+| 1 | `PermissionResult.deny` **必须**带 `message` | `check_permission` 返回裸 `bool`；原因只 print 到终端，模型收到固定串 `Permission denied.` | **结构性**：拒绝原因对模型完全丢失 |
+| 2 | `PermissionBehavior` 三值，`ask` 是独立状态 | 二值 allow/deny；`ask` 隐含在「闸门 2 命中就调 `ask_user`」的控制流里 | **结构性**：状态被折叠进控制流 |
+| 3 | `CanUseTool` 是可注入回调，宿主可替换 | 管线写死为模块级函数，`input()` 直读 stdin，无接缝 | **结构性**：不可测试、不可替换 |
+| 4 | 6 个 `PermissionMode` | 无模式概念，行为恒等于 `default` | 整个维度未建模 |
+| 5 | `allow` 可带 `updatedInput` 改写工具参数 | 无 | 能力缺失 |
+| 6 | `allow` 可带 `updatedPermissions` 写入 5 种 `destination` | 无，同一操作每次都重新问 | 能力缺失（第七节「记住审批决定」即此项） |
+| 7 | `decisionClassification` 区分临时/永久/拒绝 | 无 | 遥测维度，学习价值低 |
+
+第 1–3 项是结构性差距，直接决定 Java 设计的形状，Grill 时逐条过；第 4–7 项按「名全录、行为按需」处理 ——
+枚举和字段名录进类型，行为实现按端到端场景裁，未实现的显式标记。
 
 ## 一、课程要解决的问题
 
@@ -404,8 +449,15 @@ EOF 与 Ctrl-C 静默退出、普通输入按原串（不 strip）入历史、`h
 
 ## 四、可验证验收标准
 
-从固定源码逐项推出的最小、完整验收集。模型响应应使用 stub/fake 控制；闸门 3 的终端输入应可注入，
-以免把交互变成不可自动化的路径。s01/s02 已验收项默认继续成立，此处只列 s03 新增或改变的断言。
+**这一节记录的是参考解法的行为断言**，从固定源码逐项推出。基准换成契约后
+（[ADR-0005](../../../docs/adr/0005-基准从课程功能对等改为契约对齐.md)），它们不再是「必须逐字对等」的清单，
+而是 Grill 时的对照材料：每一条都要问「契约要求这样吗？不要求的话我为什么跟」。
+
+实际验收按「验证原则」三分工：**契约核对**（上文名全录清单是否已全部录入类型、未实现项是否显式标记）→
+**端到端场景**（J 节四个场景，JUnit 加写死的假模型响应）→ **单元测试**（只保护真会写错的边界逻辑）。
+
+模型响应用 stub/fake 控制；闸门 3 的终端输入必须可注入，否则交互会变成不可自动化的路径。
+s01/s02 已验收项默认继续成立，此处只列 s03 新增或改变的断言。
 
 ### A. 配置
 
@@ -548,18 +600,31 @@ s16 Workflow Runtime、s17 Goal Loop。对应能力均不属于 s03。
 会话内临时授权、`--allowedTools` 等 CLI 参数、YoloClassifier 自动审批、权限冒泡到父 Agent、
 `tool.checkPermissions()` 式的工具自判、Zod 验证与 `validateInput()`。
 
-**其他不属于本课的**：
+**契约里有、但参考解法裁掉的**——基准换成契约后，这些**不能再算「不属于本课」而静默排除**，必须在 Grill 时逐条裁决
+并显式标记（对应契约差距表 1、5、6、7 项）：
 
-- 记住用户的审批决定（同样命令第二次不再问）
-- 拒绝原因回传给模型（模型只收到 `Permission denied.`）
-- 权限规则的外部配置化、热加载
+- 拒绝原因回传给模型（契约的 `PermissionResult.deny.message` 是必填，`code.py` 丢掉了）
+- 记住用户的审批决定（契约的 `updatedPermissions` + 5 种 `PermissionUpdateDestination`）
+- `allow` 时改写工具输入（契约的 `updatedInput`）
+- 决策分类遥测（契约的 `decisionClassification`）
+
+**确实不属于本课的**：
+
+- 权限规则的外部配置化、热加载（`~/.claude/settings.json` 等外部来源）
 - 对 `glob` 或未注册工具名的权限约束
 - 审批的超时、默认值、非交互模式
 - 恢复 `safe_path` 式的硬边界（上游已明确废弃）
 
 ## 八、来源与可信度说明
 
-### 8.1 功能基准（一手，均指向 `eb4307f`）
+### 8.1 一手来源
+
+**功能基准（契约层）**：
+
+- `@anthropic-ai/claude-agent-sdk@0.3.233` 的 `package/sdk.d.ts` —— `npm pack @anthropic-ai/claude-agent-sdk` 解包取得
+- [Agent SDK 官方文档](https://docs.claude.com/en/api/agent-sdk/overview)
+
+**参考解法**（链接均指向 `eb4307f`，仅用于哈希与行号可复现）：
 
 - [s03_permission/code.py](https://github.com/shareAI-lab/learn-claude-code/blob/eb4307f4e495d2ed22699e1e5682eb55f8076ade/s03_permission/code.py)
 - [s03_permission/README.zh.md](https://github.com/shareAI-lab/learn-claude-code/blob/eb4307f4e495d2ed22699e1e5682eb55f8076ade/s03_permission/README.zh.md)
@@ -590,8 +655,9 @@ s16 Workflow Runtime、s17 Goal Loop。对应能力均不属于 s03。
 
 ### 8.4 仍存在的来源限制
 
-- 上游 `main` 仍在演进（本课锁定提交距今 2 天）。每课开始前需重新确认锁定提交是否仍是最新，
-  以及是否有类似本次的行为级改动。
+- 上游 `main` 仍在演进，本文引用的提交只保证哈希与行号可复现，不再作为功能基准（见 ADR-0005）。
+  课程源码若已变动，以「参考解法的另一版」对待即可，不需要重新核对对等性。
+- `.d.ts` 抽取自 `@anthropic-ai/claude-agent-sdk@0.3.233`。SDK 按周演进，实现前应重新 `npm pack` 确认契约未变。
 - `README.zh.md` 与 `code.py` 在三处文案上不一致（见 2.11），上游未修正。本文一律以 `code.py` 为准。
 - 改版删除了 s03 的「深入 CC 源码」附录，因此本课没有官方的生产级实现对照材料；
   第七节中关于 CC 权限系统的描述来自旧版 README，仅作边界说明，不构成本课事实。
@@ -607,3 +673,16 @@ s16 Workflow Runtime、s17 Goal Loop。对应能力均不属于 s03。
   工作区边界降级为闸门 2 的询问；`run_bash` 同时失去内置 denylist、UTF-8 强制解码与 `OSError` 兜底。
   这三点与本项目现有的 `Workspace` 深 Module、`BashTool` denylist、ADR-0004 直接冲突，是 Grill 阶段的首要议题。
   尚未进行 Python → Java 映射或任何实现。
+
+- 2026-08-16：完成基准变更 Grill（16 项决定），功能基准从「课程 `code.py` 功能对等」改为「Claude Code 契约对齐」，
+  已落 [ADR-0005](../../../docs/adr/0005-基准从课程功能对等改为契约对齐.md)。本票据此修订四处：新增「契约基线」节
+  （`sdk.d.ts` 权限模型的名全录清单，以及与 `code.py` 的 7 项差距）；第四节验收标准降级为「参考解法的行为断言」，
+  实际验收改走契约核对 + 端到端场景 + 边界单测三分工；第七节把「契约里有但被 `code.py` 裁掉」的 4 项从「不属于本课」
+  移出，改为必须在 Grill 时逐条裁决并显式标记；锁定提交降级为可复现性引用，不再是基准。全部实测事实原样保留。
+
+  新增的核心发现：契约差距的前 3 项是**结构性**的 —— `PermissionResult.deny` 必须带 `message`（`code.py` 把拒绝原因
+  整个丢给了终端，模型只收到固定串）、`ask` 在契约里是独立状态而非藏在控制流里、`CanUseTool` 是宿主可注入的回调而非
+  写死的模块级函数。这三点直接决定 Java 设计的形状，与既有的三条冲突并列为 Grill 首要议题。
+
+  另已定：s03 仍按 `code.py` 的内联管线实现，s04 实现 hook 系统时再迁移到 `PreToolUse` —— s15 揭示生产实现中权限就是
+  `PreToolUse` hook，这段「内联 → hook」的迁移过程本身是学习内容。仍未进行 Java 映射或任何实现。

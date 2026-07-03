@@ -37,7 +37,7 @@ Status: resolved
   [locDelta:358](https://github.com/shareAI-lab/learn-claude-code/blob/7b564c3ee6996039cb4e13a53024dfe2d4388d35/web/scripts/extract-content.ts#L358)
 - **s01 基线未变**：固定提交下 `s01_agent_loop/code.py` 的 SHA-256 仍为
   `f0bed0e007fd4ab5307f61862d2ea5241e11918b177482a8a8a89674a9bd3334`，与 01 票锁定的 `1baf1ac…` 完全相同。因此
-  [01 票](01-s01-course-baseline.md) 记录的 s01 基线在本课依然成立，本文只写增量。
+  [01 票](01-s01-agent-loop.md) 记录的 s01 基线在本课依然成立，本文只写增量。
 - 配套配置文件在本提交下的 SHA-256：`.env.example` = `7e26b938ef5e9d5b867c4c1548bdd74366366422eaeaa9f72b929fa7e71a7f77`、
   `requirements.txt` = `afb62cc77dcf2c0e33a6c9ffb5cd0e416dfce9238e98356256898651aab7057c`；内容与 s01 时一致（`anthropic>=0.25.0`、
   `python-dotenv>=1.0.0`、`pyyaml>=6.0`，s02 源码同样未导入 PyYAML）。
