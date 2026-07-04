@@ -2,8 +2,6 @@ package com.xmon.nanoagent;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,14 +23,12 @@ final class BashToolTest {
     @TempDir
     Path workingDirectory;
 
-    @ParameterizedTest
-    @ValueSource(strings = {"rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"})
-    void dangerousSubstringIsBlocked(String deniedSubstring) throws InterruptedException {
+    @Test
+    void dangerousCommandsAreNoLongerFilteredHere() throws InterruptedException {
+        // 拦截职责已整体移交 PermissionGate，工具本身不再认识任何危险模式。
         BashTool tool = new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(1));
 
-        assertEquals(
-                "Error: Dangerous command blocked",
-                tool.execute("printf before; " + deniedSubstring + "; printf after"));
+        assertEquals("beforeafter", tool.execute("printf before; printf after"));
     }
 
     @Test

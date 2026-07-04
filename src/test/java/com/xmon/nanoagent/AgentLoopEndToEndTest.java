@@ -18,12 +18,14 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -144,15 +146,131 @@ final class AgentLoopEndToEndTest {
         assertEquals("readme body + anthropic", Files.readString(workingDirectory.resolve("summary.md")));
     }
 
+    @Test
+    void creatingAFileInsideTheWorkspaceNeedsNoApproval() throws Exception {
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.TOOL_USE, toolUse(
+                        "write", "write_file", Map.of("path", "test.txt", "content", "hi"))),
+                finalAnswer("created"));
+
+        loop(model).respond("Create a file called test.txt in the current directory");
+
+        assertEquals("hi", Files.readString(workingDirectory.resolve("test.txt")));
+    }
+
+    @Test
+    void readOnlyCommandPassesEveryRule() throws Exception {
+        Files.writeString(workingDirectory.resolve("a.txt"), "");
+        FakeModelClient model = new FakeModelClient(toolRequest("ls"), finalAnswer("listed"));
+
+        loop(model).respond("What files are in the current directory?");
+
+        assertEquals("a.txt", toolResultSentToSecondRequest(model));
+    }
+
+    @Test
+    void destructiveCommandAsksAndRunsOnceApproved() throws Exception {
+        Files.writeString(workingDirectory.resolve("test.txt"), "x");
+        List<String> asked = new ArrayList<>();
+        FakeModelClient model = new FakeModelClient(toolRequest("rm test.txt"), finalAnswer("deleted"));
+
+        loop(model, recordingApproval(asked, true), new StringWriter()).respond("Delete the file test.txt");
+
+        assertEquals(List.of("bash / Potentially destructive command"), asked);
+        assertFalse(Files.exists(workingDirectory.resolve("test.txt")));
+    }
+
+    @Test
+    void refusedApprovalSkipsExecutionAndFeedsTheReasonBackToTheModel() throws Exception {
+        Files.writeString(workingDirectory.resolve("test.txt"), "x");
+        FakeModelClient model = new FakeModelClient(toolRequest("rm test.txt"), finalAnswer("kept"));
+
+        loop(model, (toolName, input, reason) -> false, new StringWriter())
+                .respond("Delete the file test.txt");
+
+        assertTrue(Files.exists(workingDirectory.resolve("test.txt")));
+        // 回填的是命中原因而非固定文案，模型据此改换策略而不是重试同一次调用。
+        assertEquals("Denied by user: Potentially destructive command", toolResultSentToSecondRequest(model));
+    }
+
+    @Test
+    void approvedWriteOutsideTheWorkspaceReallyLeavesIt() throws Exception {
+        Path outside = workingDirectory.getParent().resolve("escaped-e2e.txt");
+        Files.deleteIfExists(outside);
+        List<String> asked = new ArrayList<>();
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.TOOL_USE, toolUse("write", "write_file",
+                        Map.of("path", "../escaped-e2e.txt", "content", "leaked"))),
+                finalAnswer("written"));
+
+        try {
+            loop(model, recordingApproval(asked, true), new StringWriter())
+                    .respond("Try to write a file outside the workspace");
+
+            assertEquals(List.of("write_file / Path outside workspace"), asked);
+            assertEquals("leaked", Files.readString(outside));
+        } finally {
+            Files.deleteIfExists(outside);
+        }
+    }
+
+    @Test
+    void denyListedCommandIsBlockedWithoutAskingAndReportsTheReason() throws Exception {
+        StringWriter terminal = new StringWriter();
+        FakeModelClient model = new FakeModelClient(toolRequest("sudo ls"), finalAnswer("ok"));
+
+        // 审批器被调用即断言失败，因此这条同时证明拒绝规则短路在询问之前。
+        loop(model, unexpectedApproval(), terminal).respond("Run sudo ls");
+
+        assertEquals("Blocked: 'sudo' is on the deny list", toolResultSentToSecondRequest(model));
+        assertTrue(terminal.toString().contains("[blocked] Blocked: 'sudo' is on the deny list"));
+    }
+
+    /**
+     * 构造使用真实规则表、且不允许出现审批的循环
+     *
+     * <p>审批器被调用即断言失败，因此这些用例同时证明既有行为没有被权限管线改变。
+     *
+     * @param model 假模型客户端
+     * @return 智能体循环
+     * @throws IOException 创建工作区失败
+     */
     private AgentLoop loop(FakeModelClient model) throws IOException {
+        return loop(model, unexpectedApproval(), new StringWriter());
+    }
+
+    /**
+     * 构造使用真实规则表与指定审批器的循环
+     *
+     * @param model 假模型客户端
+     * @param approvalPrompt 审批器
+     * @param terminal 终端输出收集器
+     * @return 智能体循环
+     * @throws IOException 创建工作区失败
+     */
+    private AgentLoop loop(FakeModelClient model, ApprovalPrompt approvalPrompt, StringWriter terminal)
+            throws IOException {
+        Workspace workspace = new Workspace(workingDirectory);
         return new AgentLoop(
                 model,
-                new ToolRegistry(
-                        BashTool.production(workingDirectory, System.getenv()),
-                        new Workspace(workingDirectory)),
+                new ToolRegistry(BashTool.production(workingDirectory, System.getenv()), workspace),
+                new PermissionGate(PermissionRule.defaults(workspace), approvalPrompt),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(new StringWriter()));
+                new PrintWriter(terminal));
+    }
+
+    private static ApprovalPrompt unexpectedApproval() {
+        return (toolName, input, reason) -> {
+            throw new AssertionError("unexpected approval request: " + toolName + " / " + reason);
+        };
+    }
+
+    private static ApprovalPrompt recordingApproval(List<String> asked, boolean answer) {
+        return (toolName, input, reason) -> {
+            asked.add(toolName + " / " + reason);
+            return answer;
+        };
     }
 
     private static String toolResultSentToSecondRequest(FakeModelClient model) {

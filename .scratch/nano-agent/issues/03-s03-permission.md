@@ -686,3 +686,61 @@ s16 Workflow Runtime、s17 Goal Loop。对应能力均不属于 s03。
 
   另已定：s03 仍按 `code.py` 的内联管线实现，s04 实现 hook 系统时再迁移到 `PreToolUse` —— s15 揭示生产实现中权限就是
   `PreToolUse` hook，这段「内联 → hook」的迁移过程本身是学习内容。仍未进行 Java 映射或任何实现。
+
+- 2026-08-16：完成 s03 设计 Grill（19 项决定）与实现。97 个测试通过。三栏对照如下。
+
+  ### 契约 / 参考解法 / 本实现
+
+  | # | 契约说什么 | `code.py` 怎么解 | 本实现怎么解 | 差异理由 |
+  |---|---|---|---|---|
+  | 1 | `PermissionResult` 是按 `behavior` 判别的联合，`deny` 必须带 `message` | `check_permission` 返回裸 `bool` | `sealed interface PermissionDecision` → `Allow` / `Deny(String message)` | 契约的必填由记录构造器强制，编译期就漏不掉 |
+  | 2 | `PermissionBehavior` 三值是**规则**的行为；`CanUseTool` 只返回两态 | 二值 allow/deny，`ask` 藏在控制流里 | `PermissionBehavior` 三值枚举给规则用，`PermissionDecision` 两态给判定用 | 照搬契约的两层划分；`ASK` 在 gate 内部消解，不外泄 |
+  | 3 | `deny.message` 是给调用方的信息通道 | 终端 print 原因，模型只收到 `Permission denied.` | 原因随 `Deny` 回填成 Tool Result | `code.py` 把站点数据自己写的设计决策 3 只做了一半 |
+  | 4 | `CanUseTool` 是宿主可注入的回调 | 模块级函数写死，`input()` 直读 stdin | `PermissionGate` 注入 `AgentLoop`，审批器再注入 gate | 写死会让涉及询问的路径全部无法自动化 |
+  | 5 | `PermissionMode` 六值，会话级 | 无模式概念 | 六值全录入枚举并进 `check` 签名，非 `DEFAULT` 抛 `UnsupportedOperationException` | 名全录行为按需；退化到默认会让更严格的模式静默变宽松 |
+  | 6 | 规则自带 `behavior` | 三道闸门 = 三个独立函数 | 一张带 `behavior` 的有序规则表 + 一个审批器 | 契约本来就是这个形状；s04 hook 注册规则可直接复用 |
+  | 7 | `blockedPath` 说明越界访问是**权限请求**而非硬错 | 删除 `safe_path`，边界降级为闸门 2 询问 | 删除 `Workspace.resolveInside`，暴露 `resolve` + `contains` | 契约独立印证了课程的方向，不是作者随意裁剪 |
+  | 8 | 契约没有「工具自己拦」这个概念 | denylist 移到闸门 1 | `BashTool` 删干净，全部交给 `PermissionGate` | 留在工具内部会随工具数量重复，新增工具容易整条漏掉 |
+  | 9 | 契约不规定 denylist 条目 | 7 条，含两处已知误伤 | 照抄 7 条连误伤一起 | 学习脚手架里误伤零成本，却是「朴素子串匹配为什么不够」最好的体感 |
+  | 10 | `decisionReason` 是给用户看的原因 | 规则 1 的 message 是 `Writing outside workspace`，对只读也这么写 | 改为中性的 `Path outside workspace` | 决定 3 让这个串进了模型上下文，措辞从装饰变成有行为影响 |
+  | 11 | `CanUseTool` 入参带 `signal: AbortSignal` | `input()` 的 `EOFError` 裸冒泡，会话静默退出 | 复用 REPL 的 `LineReader`，`EndOfFileException` 冒泡到已有退出分支 | 行为与课程一致，但异常有类型，从签名看得出它去哪 |
+  | 12 | 契约不规定终端呈现 | gate 自己 print `[blocked]` | gate 不持终端，`AgentLoop` 拿到 `Deny` 后打印 | 端到端只需注入假审批器，不必伪造终端 |
+
+  ### 与 `code.py` 的可观察差异（刻意为之）
+
+  - **用户拒绝时也打印 `[blocked]`**。`code.py` 只在闸门 1 命中时打印，闸门 2 被用户拒绝时不打。决定 6 统一成规则表后，
+    两条路径都产出 `Deny`，此处无法区分来源。保留统一打印：每次拒绝都有一行可见记录，符合「错误必须暴露且可观测」。
+  - **system prompt 保持 `Use tools to solve tasks. Act, don't explain.`**，不跟 s03 的临时措辞（s04 又换回去了）。
+  - **工具名保持黄色**，不跟 s03 的黄改青。
+  - **横幅与提示符去掉课程编号**，改为 `nano-agent`。单一累加 codebase 停在任何课号上都是错的。
+  - **越界写入现在真的写出去了**。`WriteFileToolTest` 从断言「拒绝且文件不存在」改为断言「真的写到工作区外」。
+
+  ### 契约有而本课未实现（已在 Javadoc 标注）
+
+  `updatedInput`（改写工具输入）、`updatedPermissions` + 5 种 `PermissionUpdateDestination`（记住决定）、
+  `decisionClassification`（遥测）、`blockedPath` / `title` / `displayName`（富 UI 字段）。
+
+  ### 新增与改动
+
+  新增 8 个类型：`PermissionMode`、`PermissionBehavior`、`PermissionDecision`、`PermissionRule`、`RuleCheck`、
+  `PermissionGate`、`ApprovalPrompt`、`TerminalApprovalPrompt`。改动 `AgentLoop`、`Workspace`、`BashTool`、
+  三个 file tool、`Repl`、`Main`。测试新增 `PermissionGateTest`（12 条规则边界）与 5 个端到端场景
+  （课程四个加一个 DENY 场景——课程给的四个场景没有任何一个命中拒绝表）。
+
+  ### Code review 修掉的三处（把权限判定插进循环时引入的）
+
+  1. **判定失败会杀掉整个会话**。`Workspace.contains` 的 `IOException`（符号链接成环耗尽 40 跳、目录无权 stat）
+     原先由 file tool 的 `catch` 兜住变成 `Error:` 结果，移到权限判定后就跑到了任何 `try` 之外，一路逃到 `main`。
+     更糟的是此时历史里已有没有配对 Tool Result 的 Tool Call，在 REPL 层兜也没用——下一次请求必被 API 拒绝。
+     改为在 `PermissionGate.check` 内 fail-closed：判定失败一律拒绝，底层异常写进拒绝原因，同时回填模型并打印给用户。
+     `check` 因此不再抛受检异常，`permit` / `respond` / `Repl.run` 的 `throws IOException` 一并收回。
+  2. **审批提示上按 Ctrl-C / Ctrl-D 会带栈退出**。决定 11 的理由「异常冒泡到 REPL 已有的退出分支」当时没核实就下了结论：
+     `Repl` 的 try 只包住它自己的 `readLine(PROMPT)`，`agentLoop.respond(query)` 在 try 之外。课程的 Python REPL
+     `except` 包住整个循环体（含 `agent_loop()`），所以那边确实接得住。已把 `Repl` 的 try 扩到覆盖整个回合，
+     决定 11 的行为等价性这才真正成立。
+  3. **用户否决回填的原因读起来像建议而非拒绝**。`Deny(reason)` 让模型只看到 `Potentially destructive command`，
+     看不出有人拒绝过，最自然的下一步就是重发同一次调用，于是再弹一次审批，可能循环到 `max_tokens`。
+     改为 `Denied by user: {reason}`，与规则拒绝的 `Blocked: ...` 区分开。
+
+  未采纳的一项：review 建议给拒绝的 Tool Result 设 `is_error`。第四节 F 已把「不设 `is_error`」记为验收项，
+  且权限拒绝是正常裁决结果而非工具故障，维持不设。

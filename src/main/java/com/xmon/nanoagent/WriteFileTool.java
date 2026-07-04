@@ -36,7 +36,7 @@ final class WriteFileTool implements ToolHandler {
         // 解码在错误边界之外：输入形状错误必须直接暴露，而不是变成一条 Tool Result。
         WriteFileInput decoded = input.convert(WriteFileInput.class);
         try {
-            Path file = workspace.resolveInside(decoded.path());
+            Path file = workspace.resolve(decoded.path());
             Path parent = file.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
@@ -45,9 +45,6 @@ final class WriteFileTool implements ToolHandler {
             // 课程源码的计数口径是字符数而非字节数，文案与实际字节数在多字节字符下并不一致。
             String content = decoded.content();
             return "Wrote " + content.codePointCount(0, content.length()) + " bytes to " + decoded.path();
-        } catch (IllegalArgumentException escape) {
-            // 越界文案是课程的逐字断言项，只回显 Workspace 给出的消息；OS 异常仍走下面的 toString() 形态。
-            return "Error: " + escape.getMessage();
         } catch (IOException | RuntimeException failure) {
             return "Error: " + failure;
         }

@@ -14,7 +14,9 @@ import java.util.Objects;
  */
 final class Repl {
 
-    private static final String PROMPT = "\033[36ms02 >> \033[0m";
+    // 横幅与提示符不带课程编号：这是单一累加 codebase，实现完某一课之后它同时也是之前每一课，
+    // 停在任何一个课号上都是错的。进度信息由 git 历史承载。
+    private static final String PROMPT = "\033[36mnano-agent >> \033[0m";
 
     private final LineReader input;
     private final PrintWriter output;
@@ -39,28 +41,28 @@ final class Repl {
      * @throws InterruptedException 工具执行被中断
      */
     void run() throws InterruptedException {
-        writeLine("s02: Tool Use — 在 s01 基础上加了 4 个工具");
+        writeLine("nano-agent — 手写 coding agent harness");
         writeLine("输入问题，回车发送。输入 q 退出。");
         writeLine("");
 
         while (true) {
-            String query;
+            // try 覆盖整个回合而不只是提示符：权限审批与这里共用同一个 LineReader，
+            // 在审批提示上按 Ctrl-C 或送入 EOF 时，异常从 respond 里抛出，只包住 readLine 接不住。
             try {
-                query = input.readLine(PROMPT);
+                String query = input.readLine(PROMPT);
+                String normalized = query.strip().toLowerCase(Locale.ROOT);
+                if (normalized.isEmpty() || normalized.equals("q") || normalized.equals("exit")) {
+                    return;
+                }
+
+                List<String> answer = agentLoop.respond(query);
+                for (String text : answer) {
+                    writeLine(text);
+                }
+                writeLine("");
             } catch (EndOfFileException | UserInterruptException ignored) {
                 return;
             }
-
-            String normalized = query.strip().toLowerCase(Locale.ROOT);
-            if (normalized.isEmpty() || normalized.equals("q") || normalized.equals("exit")) {
-                return;
-            }
-
-            List<String> answer = agentLoop.respond(query);
-            for (String text : answer) {
-                writeLine(text);
-            }
-            writeLine("");
         }
     }
 

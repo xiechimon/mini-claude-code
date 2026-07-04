@@ -20,16 +20,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * 执行 Bash 命令
  *
- * <p>不受 {@link Workspace} 约束：命令能触及的范围只由下面的 denylist 限制。
+ * <p>不受 {@link Workspace} 约束，自身也不做任何命令拦截：危险命令由 {@link PermissionGate} 在工具执行
+ * 之前统一裁决。把拦截留在工具内部会让策略随工具数量重复，新增工具时也容易整条漏掉。
  */
 final class BashTool implements ToolHandler {
 
-    private static final List<String> DENIED_SUBSTRINGS = List.of(
-            "rm -rf /",
-            "sudo",
-            "shutdown",
-            "reboot",
-            "> /dev/");
     private static final Duration PRODUCTION_TIMEOUT = Duration.ofSeconds(120);
     private static final int MAX_RESULT_CODE_POINTS = 50_000;
 
@@ -86,10 +81,6 @@ final class BashTool implements ToolHandler {
      * @throws InterruptedException 当前线程被中断
      */
     String execute(String command) throws InterruptedException {
-        if (DENIED_SUBSTRINGS.stream().anyMatch(command::contains)) {
-            return "Error: Dangerous command blocked";
-        }
-
         Process process = null;
         ExecutorService readers = Executors.newVirtualThreadPerTaskExecutor();
         try {

@@ -61,11 +61,18 @@ final class EditFileToolTest {
     }
 
     @Test
-    void missingFileAndEscapingPathReturnErrorText() {
+    void missingFileReturnsErrorTextButEscapingPathIsEditedForReal() throws Exception {
         assertTrue(edit("missing.txt", "a", "b").startsWith("Error: "));
-        assertEquals(
-                "Error: Path escapes workspace: ../outside.txt",
-                edit("../outside.txt", "a", "b"));
+
+        Path outside = workingDirectory.getParent().resolve("outside-edit.txt");
+        Files.writeString(outside, "a");
+        try {
+            // 边界由 PermissionGate 裁决，工具自身不再拒绝越界路径。
+            assertEquals("Edited ../outside-edit.txt", edit("../outside-edit.txt", "a", "b"));
+            assertEquals("b", Files.readString(outside));
+        } finally {
+            Files.deleteIfExists(outside);
+        }
     }
 
     private String edit(String path, String oldText, String newText) {

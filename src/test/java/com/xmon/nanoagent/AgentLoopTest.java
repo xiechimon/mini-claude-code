@@ -254,6 +254,7 @@ final class AgentLoopTest {
         AgentLoop loop = new AgentLoop(
                 model,
                 toolRegistry(),
+                permitAll(),
                 "test-model",
                 workingDirectory,
                 failingWriter);
@@ -282,6 +283,7 @@ final class AgentLoopTest {
         AgentLoop loop = new AgentLoop(
                 failingModel,
                 toolRegistry(),
+                permitAll(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(new StringWriter()));
@@ -289,10 +291,25 @@ final class AgentLoopTest {
         assertEquals(modelFailure, assertThrows(IllegalStateException.class, () -> loop.respond("fail")));
     }
 
+    /**
+     * 构造不设任何规则的权限闸门
+     *
+     * <p>本类验证的是循环机制而非权限策略，因此规则表留空；审批器一旦被调用即断言失败。
+     * 规则表本身的行为由 {@link AgentLoopEndToEndTest} 覆盖。
+     *
+     * @return 放行一切的权限闸门
+     */
+    private static PermissionGate permitAll() {
+        return new PermissionGate(List.of(), (toolName, input, reason) -> {
+            throw new AssertionError("unexpected approval request: " + toolName);
+        });
+    }
+
     private AgentLoop loop(FakeModelClient model, StringWriter terminal) throws IOException {
         return new AgentLoop(
                 model,
                 toolRegistry(),
+                permitAll(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(terminal));

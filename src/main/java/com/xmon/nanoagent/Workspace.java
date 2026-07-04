@@ -9,8 +9,11 @@ import java.util.Objects;
 /**
  * 以工作目录为根的路径边界
  *
- * <p>包含性判定发生在符号链接解析之后，因此指向工作区外的链接会被拒绝；判定同时允许路径尚不存在，
- * 以支持写入新文件。JDK 没有同时满足这两点的现成实现，解析步骤的取舍见 ADR-0004。
+ * <p>包含性判定发生在符号链接解析之后，因此指向工作区外的链接同样会被识别为越界；判定同时允许路径
+ * 尚不存在，以支持写入新文件。JDK 没有同时满足这两点的现成实现，解析步骤的取舍见 ADR-0004。
+ *
+ * <p>本类只解析和判定，不裁决。越界路径是否放行由 {@link PermissionGate} 决定——Claude Code 契约把
+ * 越界访问建模成携带原因的权限请求，而非硬错误。
  */
 final class Workspace {
 
@@ -40,23 +43,6 @@ final class Workspace {
     }
 
     /**
-     * 把模型给出的路径解析为工作区内的绝对路径
-     *
-     * @param rawPath 模型给出的原始路径，绝对路径不与根目录拼接
-     * @return 工作区内的绝对路径
-     * @throws IOException 解析路径失败
-     * @throws IllegalArgumentException 解析结果落在工作区外
-     */
-    Path resolveInside(String rawPath) throws IOException {
-        Path resolved = resolve(rawPath);
-        if (!resolved.startsWith(root)) {
-            // 回显原始输入而非解析结果，与课程源码一致。
-            throw new IllegalArgumentException("Path escapes workspace: " + rawPath);
-        }
-        return resolved;
-    }
-
-    /**
      * 判断路径是否落在工作区内
      *
      * @param rawPath 模型给出的原始路径
@@ -68,13 +54,13 @@ final class Workspace {
     }
 
     /**
-     * 解析模型给出的路径
+     * 解析模型给出的路径，不判定包含性
      *
-     * @param rawPath 模型给出的原始路径
-     * @return 解析后的绝对路径
+     * @param rawPath 模型给出的原始路径，绝对路径不与根目录拼接
+     * @return 解析后的绝对路径，可能落在工作区外
      * @throws IOException 解析路径失败
      */
-    private Path resolve(String rawPath) throws IOException {
+    Path resolve(String rawPath) throws IOException {
         return resolveAllowingMissing(root.resolve(rawPath), MAX_SYMBOLIC_LINK_HOPS);
     }
 

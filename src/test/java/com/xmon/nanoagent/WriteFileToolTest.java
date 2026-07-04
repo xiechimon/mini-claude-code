@@ -65,12 +65,15 @@ final class WriteFileToolTest {
 
     @Test
     void escapingPathProducesNoSideEffect() throws Exception {
-        Path outside = workingDirectory.getParent().resolve("outside.txt");
+        Path outside = workingDirectory.getParent().resolve("outside-write.txt");
+        Files.deleteIfExists(outside);
 
-        assertEquals(
-                "Error: Path escapes workspace: ../outside.txt",
-                write("../outside.txt", "leaked"));
-        assertFalse(Files.exists(outside));
+        try {
+            assertEquals("Wrote 6 bytes to ../outside-write.txt", write("../outside-write.txt", "leaked"));
+            assertEquals("leaked", Files.readString(outside));
+        } finally {
+            Files.deleteIfExists(outside);
+        }
     }
 
     @Test

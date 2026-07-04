@@ -38,13 +38,10 @@ final class ReadFileTool implements ToolHandler {
         ReadFileInput decoded = input.convert(ReadFileInput.class);
         try {
             List<String> lines = Files
-                    .readString(workspace.resolveInside(decoded.path()), StandardCharsets.UTF_8)
+                    .readString(workspace.resolve(decoded.path()), StandardCharsets.UTF_8)
                     .lines()
                     .toList();
             return truncateAndJoin(lines, decoded.limit());
-        } catch (IllegalArgumentException escape) {
-            // 越界文案是课程的逐字断言项，只回显 Workspace 给出的消息；OS 异常仍走下面的 toString() 形态。
-            return "Error: " + escape.getMessage();
         } catch (IOException | RuntimeException failure) {
             return "Error: " + failure;
         }

@@ -36,7 +36,7 @@ final class EditFileTool implements ToolHandler {
         // 解码在错误边界之外：输入形状错误必须直接暴露，而不是变成一条 Tool Result。
         EditFileInput decoded = input.convert(EditFileInput.class);
         try {
-            Path file = workspace.resolveInside(decoded.path());
+            Path file = workspace.resolve(decoded.path());
             String text = Files.readString(file, StandardCharsets.UTF_8);
             int start = text.indexOf(decoded.oldText());
             if (start < 0) {
@@ -48,9 +48,6 @@ final class EditFileTool implements ToolHandler {
                     + text.substring(start + decoded.oldText().length());
             Files.writeString(file, edited, StandardCharsets.UTF_8);
             return "Edited " + decoded.path();
-        } catch (IllegalArgumentException escape) {
-            // 越界文案是课程的逐字断言项，只回显 Workspace 给出的消息；OS 异常仍走下面的 toString() 形态。
-            return "Error: " + escape.getMessage();
         } catch (IOException | RuntimeException failure) {
             return "Error: " + failure;
         }

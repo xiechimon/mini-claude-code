@@ -38,9 +38,13 @@ public final class Main {
             PrintWriter output = terminal.writer();
             LineReader input = LineReaderBuilder.builder().terminal(terminal).build();
             BashTool bashTool = BashTool.production(workingDirectory, environment.values());
-            ToolRegistry toolRegistry = new ToolRegistry(bashTool, new Workspace(workingDirectory));
+            Workspace workspace = new Workspace(workingDirectory);
+            ToolRegistry toolRegistry = new ToolRegistry(bashTool, workspace);
+            PermissionGate permissionGate = new PermissionGate(
+                    PermissionRule.defaults(workspace), new TerminalApprovalPrompt(input, output));
             ModelClient modelClient = client.messages()::create;
-            AgentLoop agentLoop = new AgentLoop(modelClient, toolRegistry, modelId, workingDirectory, output);
+            AgentLoop agentLoop = new AgentLoop(
+                    modelClient, toolRegistry, permissionGate, modelId, workingDirectory, output);
             new Repl(input, output, agentLoop).run();
         } finally {
             client.close();

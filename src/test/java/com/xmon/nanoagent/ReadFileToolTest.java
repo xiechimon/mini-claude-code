@@ -83,10 +83,15 @@ final class ReadFileToolTest {
     }
 
     @Test
-    void escapingPathReturnsTheWorkspaceErrorText() {
-        assertEquals(
-                "Error: Path escapes workspace: ../outside.txt",
-                read(Map.of("path", "../outside.txt")));
+    void escapingPathIsReadForRealBecausePermissionOwnsTheBoundary() throws Exception {
+        Path outside = workingDirectory.getParent().resolve("outside-read.txt");
+        Files.writeString(outside, "leaked");
+
+        try {
+            assertEquals("leaked", read(Map.of("path", "../outside-read.txt")));
+        } finally {
+            Files.deleteIfExists(outside);
+        }
     }
 
     @Test

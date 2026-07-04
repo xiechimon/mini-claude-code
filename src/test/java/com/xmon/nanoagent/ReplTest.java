@@ -1,10 +1,13 @@
 package com.xmon.nanoagent;
 
+import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.ContentBlock;
+import com.anthropic.models.messages.DirectCaller;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.TextBlock;
+import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.Usage;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -48,9 +51,9 @@ final class ReplTest {
         repl.run();
 
         assertEquals("  keep spaces  ", model.requests.getFirst().messages().getFirst().content().asString());
-        assertEquals(List.of("\033[36ms02 >> \033[0m", "\033[36ms02 >> \033[0m"), input.prompts);
+        assertEquals(List.of("\033[36mnano-agent >> \033[0m", "\033[36mnano-agent >> \033[0m"), input.prompts);
         assertEquals("""
-                s02: Tool Use — 在 s01 基础上加了 4 个工具
+                nano-agent — 手写 coding agent harness
                 输入问题，回车发送。输入 q 退出。
 
                 first
@@ -94,29 +97,82 @@ final class ReplTest {
         assertEquals(0, model.requests.size());
     }
 
+    /**
+     * 构造不设任何规则的权限闸门
+     *
+     * <p>本类验证的是 REPL 交互而非权限策略，因此规则表留空；审批器一旦被调用即断言失败。
+     *
+     * @return 放行一切的权限闸门
+     */
+    private static PermissionGate permitAll() {
+        return new PermissionGate(List.of(), (toolName, input, reason) -> {
+            throw new AssertionError("unexpected approval request: " + toolName);
+        });
+    }
+
     private AgentLoop agentLoop(FakeModelClient model, StringWriter output) throws IOException {
         return new AgentLoop(
                 model,
                 new ToolRegistry(
                         new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(2)),
                         new Workspace(workingDirectory)),
+                permitAll(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(output));
+    }
+
+    @Test
+    void interruptAtTheApprovalPromptExitsGracefullyInsteadOfEscaping() throws Exception {
+        FakeModelClient model = new FakeModelClient(
+                toolUseMessage("bash", Map.of("command", "rm test.txt")),
+                message(text("unreachable")));
+        // 第一次 readLine 是主提示符，第二次是权限审批提示——中断发生在审批上。
+        StubLineReader input = new StubLineReader("delete test.txt", new UserInterruptException("at approval"));
+        StringWriter output = new StringWriter();
+        LineReader reader = input.reader();
+        Workspace workspace = new Workspace(workingDirectory);
+        AgentLoop agentLoop = new AgentLoop(
+                model,
+                new ToolRegistry(new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(2)), workspace),
+                new PermissionGate(
+                        PermissionRule.defaults(workspace),
+                        new TerminalApprovalPrompt(reader, new PrintWriter(output))),
+                "test-model",
+                workingDirectory,
+                new PrintWriter(output));
+
+        assertDoesNotThrow(() -> new Repl(reader, new PrintWriter(output), agentLoop).run());
+        assertEquals(1, model.requests.size());
     }
 
     private static ContentBlock text(String value) {
         return ContentBlock.ofText(TextBlock.builder().citations(Optional.empty()).text(value).build());
     }
 
+    private static Message toolUseMessage(String name, Map<String, String> input) {
+        return message(
+                StopReason.TOOL_USE,
+                ContentBlock.ofToolUse(ToolUseBlock.builder()
+                        .id("tool-call")
+                        .caller(DirectCaller.builder().build())
+                        .input(JsonValue.from(input))
+                        .name(name)
+                        .build()));
+    }
+
     private static Message message(ContentBlock... content) {
+        return message(StopReason.END_TURN, content);
+    }
+
+    private static Message message(StopReason stopReason, ContentBlock... content) {
         return Message.builder()
                 .id("message")
                 .container(Optional.empty())
                 .content(Arrays.asList(content))
                 .model("test-model")
                 .stopDetails(Optional.empty())
-                .stopReason(StopReason.END_TURN)
+                .stopReason(stopReason)
                 .stopSequence(Optional.empty())
                 .usage(Usage.builder()
                         .cacheCreation(Optional.empty())
