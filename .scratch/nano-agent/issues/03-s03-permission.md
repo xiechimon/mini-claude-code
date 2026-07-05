@@ -744,3 +744,17 @@ s16 Workflow Runtime、s17 Goal Loop。对应能力均不属于 s03。
 
   未采纳的一项：review 建议给拒绝的 Tool Result 设 `is_error`。第四节 F 已把「不设 `is_error`」记为验收项，
   且权限拒绝是正常裁决结果而非工具故障，维持不设。
+
+  ### 命令模式表的定位（review 第 4 项的结论）
+
+  Review 指出 `> /dev/` 收窄成 `> /dev/sda` 之后，`> /dev/sdb`、`>/dev/sda`（无空格）等一并静默放行。属实，
+  但**不修**。用户裁定：命令模式表基于朴素子串匹配，false positive 与 false negative 都存在，仅用于教学，
+  **不作为安全边界**。
+
+  这条已写进 `PermissionRule` 的类文档而不只留在票里——否则后来者会把它当缺陷去「加固」，而在朴素子串匹配
+  之上加固只会制造一层看着像防线的东西。两类错误现在都由 `PermissionGateTest` 显式钉住：
+  false positive 三条（`rm -rf /tmp/build`、`confirm the change`、大小写敏感），
+  false negative 三条（`/dev/null`、`/dev/sdb`、无空格的 `>/dev/sda`）。
+
+  Grill 阶段的教训：决定 9 我只把「误伤」摆出来讨论，没把反方向的漏放同样摆出来。同一个机制的两类错误
+  应该一起呈现，否则用户是在信息不全的情况下做决定。

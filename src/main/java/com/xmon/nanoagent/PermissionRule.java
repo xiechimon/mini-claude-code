@@ -16,13 +16,18 @@ import java.util.Set;
  * 决定该原因导向拒绝还是询问。课程用三个独立函数表达的硬拒绝、规则匹配、用户审批，在这里塌缩成
  * 一张有序规则表加一个审批器——区分「绝对禁止」和「需要确认」的信息由 {@link #behavior} 承载。
  *
+ * <p><b>命令模式表不是安全边界，只是教学示例。</b>两组模式都是朴素子串匹配，两类错误都存在且不打算修：
+ * false positive——{@code rm -rf /tmp/build} 命中 {@code rm -rf /}，{@code confirm the change} 含子串
+ * {@code rm }；false negative——{@code > /dev/sdb} 与 {@code >/dev/sda} 都不命中，大小写不同即整条漏过。
+ * 它要演示的是「判定发生在工具执行之前」这个位置，不是真的挡得住谁。想把它当防线加固之前，先换掉朴素子串匹配。
+ *
  * @param tools 本规则覆盖的工具名，其余工具名一律不命中
  * @param check 判定逻辑
  * @param behavior 命中后的行为
  */
 record PermissionRule(Set<String> tools, RuleCheck check, PermissionBehavior behavior) {
 
-    /** 永远禁止的命令片段，按序匹配，首个命中者胜出。 */
+    /** 永远禁止的命令片段，按序匹配，首个命中者胜出。教学示例，见类文档关于安全边界的说明。 */
     private static final List<String> DENIED_SUBSTRINGS = List.of(
             "rm -rf /",
             "sudo",

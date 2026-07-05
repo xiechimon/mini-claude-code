@@ -67,8 +67,13 @@ final class PermissionGateTest {
     }
 
     @Test
-    void narrowedDeviceRedirectNoLongerBlocksHarmlessTargets() throws Exception {
+    void narrowedDeviceRedirectAlsoLetsRealBlockDevicesThrough() throws Exception {
+        // 拒绝表把 "> /dev/" 收窄成 "> /dev/sda" 才让 /dev/null 通过，代价是其余块设备一并放行。
+        // 这是朴素子串匹配的 false negative，与上面几条 false positive 同源，刻意不修：
+        // 这张表是教学示例而不是安全边界。
         assertInstanceOf(PermissionDecision.Allow.class, bash("echo hi > /dev/null"));
+        assertInstanceOf(PermissionDecision.Allow.class, bash("cat img > /dev/sdb"));
+        assertInstanceOf(PermissionDecision.Allow.class, bash("cat img >/dev/sda"));
     }
 
     @Test
