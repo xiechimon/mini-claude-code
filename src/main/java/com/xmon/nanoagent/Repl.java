@@ -1,5 +1,6 @@
 package com.xmon.nanoagent;
 
+import com.xmon.nanoagent.core.AgentLoop;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.UserInterruptException;
@@ -12,7 +13,7 @@ import java.util.Objects;
 /**
  * 处理命令行交互
  */
-final class Repl {
+public final class Repl {
 
     // 横幅与提示符不带课程编号：这是单一累加 codebase，实现完某一课之后它同时也是之前每一课，
     // 停在任何一个课号上都是错的。进度信息由 git 历史承载。

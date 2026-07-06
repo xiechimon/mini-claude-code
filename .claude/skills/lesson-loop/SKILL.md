@@ -1,7 +1,6 @@
 ---
 name: lesson-loop
 description: 开一课（sNN）时走的 7 步循环，以及契约 / 参考解法 / 实现旁证三层基准的取用方法。用法：/lesson-loop s04
-disable-model-invocation: true
 ---
 
 # 每课的循环

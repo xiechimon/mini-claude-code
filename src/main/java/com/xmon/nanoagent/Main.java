@@ -2,6 +2,15 @@ package com.xmon.nanoagent;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.xmon.nanoagent.core.AgentLoop;
+import com.xmon.nanoagent.core.ModelClient;
+import com.xmon.nanoagent.host.EffectiveEnvironment;
+import com.xmon.nanoagent.host.Workspace;
+import com.xmon.nanoagent.permission.PermissionGate;
+import com.xmon.nanoagent.permission.PermissionRule;
+import com.xmon.nanoagent.permission.TerminalApprovalPrompt;
+import com.xmon.nanoagent.tool.BashTool;
+import com.xmon.nanoagent.tool.ToolRegistry;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
