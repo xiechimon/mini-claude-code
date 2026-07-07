@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,9 +49,10 @@ final class AgentLoopEndToEndTest {
                 toolRequest("printf 'print(\"Hello, world!\")\\n' > hello.py"),
                 finalAnswer("created"));
 
-        List<String> answer = loop(model).respond("创建 hello.py");
+        StringWriter terminal = new StringWriter();
+        loop(model, unexpectedApproval(), terminal).respond("创建 hello.py");
 
-        assertEquals(List.of("created"), answer);
+        assertTrue(terminal.toString().endsWith("created"));
         assertEquals("print(\"Hello, world!\")\n", Files.readString(workingDirectory.resolve("hello.py")));
         assertEquals("(no output)", toolResultSentToSecondRequest(model));
     }
@@ -95,8 +97,11 @@ final class AgentLoopEndToEndTest {
                 message(StopReason.TOOL_USE, toolUse("read", "read_file", Map.of("path", "README.md"))),
                 finalAnswer("这是一个学习项目"));
 
-        assertEquals(List.of("这是一个学习项目"), loop(model).respond(
-                "Read the file README.md and tell me what this project is about"));
+        StringWriter terminal = new StringWriter();
+        loop(model, unexpectedApproval(), terminal).respond(
+                "Read the file README.md and tell me what this project is about");
+
+        assertTrue(terminal.toString().endsWith("这是一个学习项目"));
 
         assertEquals("# Nano Agent\n一个学习项目。", toolResultSentToSecondRequest(model));
     }
@@ -344,9 +349,15 @@ final class AgentLoopEndToEndTest {
         }
 
         @Override
-        public Message create(MessageCreateParams request) {
+        public Stream<ModelEvent> events(MessageCreateParams request) {
             requests.add(request);
-            return responses.removeFirst();
+            Message message = responses.removeFirst();
+            List<ModelEvent> events = new ArrayList<>();
+            for (ContentBlock block : message.content()) {
+                block.text().map(TextBlock::text).ifPresent(text -> events.add(new ModelEvent.TextDelta(text)));
+            }
+            events.add(new ModelEvent.MessageComplete(message));
+            return events.stream();
         }
     }
 }

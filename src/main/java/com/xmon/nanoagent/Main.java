@@ -4,6 +4,7 @@ import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.xmon.nanoagent.core.AgentLoop;
 import com.xmon.nanoagent.core.ModelClient;
+import com.xmon.nanoagent.core.StreamingModelClient;
 import com.xmon.nanoagent.host.EffectiveEnvironment;
 import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.PermissionGate;
@@ -51,7 +52,8 @@ public final class Main {
             ToolRegistry toolRegistry = new ToolRegistry(bashTool, workspace);
             PermissionGate permissionGate = new PermissionGate(
                     PermissionRule.defaults(workspace), new TerminalApprovalPrompt(input, output));
-            ModelClient modelClient = client.messages()::create;
+            // 默认走流式；非流式实现 BlockingModelClient 同样产出事件流，仅用于测试与对照。
+            ModelClient modelClient = new StreamingModelClient(client.messages());
             AgentLoop agentLoop = new AgentLoop(
                     modelClient, toolRegistry, permissionGate, modelId, workingDirectory, output);
             new Repl(input, output, agentLoop).run();

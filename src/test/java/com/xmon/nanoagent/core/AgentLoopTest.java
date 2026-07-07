@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,14 +51,14 @@ final class AgentLoopTest {
     Path workingDirectory;
 
     @Test
-    void finalResponseReturnsTextAndSendsTheExactRequestInvariants() throws Exception {
+    void finalTextIsPrintedToTheTerminalAndRequestInvariantsHold() throws Exception {
         FakeModelClient model = new FakeModelClient(message(StopReason.MAX_TOKENS, text("first"), text("second")));
         StringWriter terminal = new StringWriter();
         AgentLoop loop = loop(model, terminal);
 
-        List<String> response = loop.respond("  keep my spaces  ");
+        loop.respond("  keep my spaces  ");
 
-        assertEquals(List.of("first", "second"), response);
+        assertEquals("firstsecond", terminal.toString());
         MessageCreateParams request = model.requests.getFirst();
         assertEquals("test-model", request.model().asString());
         assertEquals(8_000L, request.maxTokens());
@@ -67,7 +68,6 @@ final class AgentLoopTest {
                 request.system().orElseThrow().asString());
         assertEquals("  keep my spaces  ", request.messages().getFirst().content().asString());
         assertEquals(MessageParam.Role.USER, request.messages().getFirst().role());
-        assertEquals("", terminal.toString());
     }
 
     @Test
@@ -120,7 +120,7 @@ final class AgentLoopTest {
         StringWriter terminal = new StringWriter();
         AgentLoop loop = loop(model, terminal);
 
-        assertEquals(List.of("done"), loop.respond("run both"));
+        loop.respond("run both");
 
         assertEquals(2, model.requests.size());
         List<MessageParam> secondHistory = model.requests.get(1).messages();
@@ -134,9 +134,12 @@ final class AgentLoopTest {
         assertToolResult(results.get(1), "call-2", "from the file");
 
         String progress = terminal.toString();
+        // TOOL_USE 响应里夹带的文本现在也会打印：先「working」，再依次是工具名与预览，最后「done」。
+        assertTrue(progress.startsWith("working"));
         assertTrue(progress.indexOf("> bash") < progress.indexOf("first\n"));
         assertTrue(progress.indexOf("first\n") < progress.indexOf("> read_file"));
         assertTrue(progress.indexOf("> read_file") < progress.indexOf("from the file"));
+        assertTrue(progress.endsWith("done"));
     }
 
     @Test
@@ -160,7 +163,7 @@ final class AgentLoopTest {
                 message(StopReason.END_TURN, text("done")));
         StringWriter terminal = new StringWriter();
 
-        assertEquals(List.of("done"), loop(model, terminal).respond("call an unknown tool"));
+        loop(model, terminal).respond("call an unknown tool");
 
         List<ContentBlockParam> results = model.requests.get(1).messages().get(2).content().asBlockParams();
         assertToolResult(results.getFirst(), "call", "Unknown: grep");
@@ -185,7 +188,8 @@ final class AgentLoopTest {
         String fullResult = result.content().orElseThrow().asString();
         assertEquals(250, fullResult.codePointCount(0, fullResult.length()));
 
-        String preview = terminal.toString().substring(terminal.toString().indexOf('\n') + 1).strip();
+        // 预览是工具名之后、截断到 200 码点的那一行；后续回合的文本也进 terminal，不能用整串 strip 提取。
+        String preview = terminal.toString().lines().skip(1).findFirst().orElseThrow();
         assertEquals(200, preview.codePointCount(0, preview.length()));
         assertTrue(preview.endsWith("😀"));
     }
@@ -215,7 +219,7 @@ final class AgentLoopTest {
         AgentLoop loop = loop(model, new StringWriter());
 
         assertThrows(RuntimeException.class, () -> loop.respond("bad input"));
-        assertEquals(List.of("recovered next turn"), loop.respond("next input"));
+        loop.respond("next input");
 
         List<MessageParam> history = model.requests.get(1).messages();
         assertEquals(3, history.size());
@@ -274,7 +278,7 @@ final class AgentLoopTest {
         FakeModelClient model = new FakeModelClient(responses);
         AgentLoop loop = loop(model, new StringWriter());
 
-        assertEquals(List.of("finished"), loop.respond("keep going"));
+        loop.respond("keep going");
         assertEquals(26, model.requests.size());
     }
 
@@ -382,9 +386,15 @@ final class AgentLoopTest {
         }
 
         @Override
-        public Message create(MessageCreateParams request) {
+        public Stream<ModelEvent> events(MessageCreateParams request) {
             requests.add(request);
-            return responses.removeFirst();
+            Message message = responses.removeFirst();
+            List<ModelEvent> events = new ArrayList<>();
+            for (ContentBlock block : message.content()) {
+                block.text().map(TextBlock::text).ifPresent(text -> events.add(new ModelEvent.TextDelta(text)));
+            }
+            events.add(new ModelEvent.MessageComplete(message));
+            return events.stream();
         }
     }
 }

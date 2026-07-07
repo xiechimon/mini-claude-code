@@ -6,7 +6,6 @@ import org.jline.reader.LineReader;
 import org.jline.reader.UserInterruptException;
 
 import java.io.PrintWriter;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -56,10 +55,8 @@ public final class Repl {
                     return;
                 }
 
-                List<String> answer = agentLoop.respond(query);
-                for (String text : answer) {
-                    writeLine(text);
-                }
+                // 最终文本由 AgentLoop 在 TextDelta 到达时逐字打印，这里只补一个空行分隔回合。
+                agentLoop.respond(query);
                 writeLine("");
             } catch (EndOfFileException | UserInterruptException ignored) {
                 return;

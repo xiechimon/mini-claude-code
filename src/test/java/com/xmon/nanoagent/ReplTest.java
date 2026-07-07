@@ -11,6 +11,7 @@ import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.Usage;
 import com.xmon.nanoagent.core.AgentLoop;
 import com.xmon.nanoagent.core.ModelClient;
+import com.xmon.nanoagent.core.ModelEvent;
 import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.permission.PermissionRule;
@@ -37,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,9 +66,7 @@ final class ReplTest {
                 nano-agent — 手写 coding agent harness
                 输入问题，回车发送。输入 q 退出。
 
-                first
-                second
-
+                firstsecond
                 """, output.toString());
     }
 
@@ -206,9 +206,15 @@ final class ReplTest {
         }
 
         @Override
-        public Message create(MessageCreateParams request) {
+        public Stream<ModelEvent> events(MessageCreateParams request) {
             requests.add(request);
-            return responses.removeFirst();
+            Message message = responses.removeFirst();
+            List<ModelEvent> events = new ArrayList<>();
+            for (ContentBlock block : message.content()) {
+                block.text().map(TextBlock::text).ifPresent(text -> events.add(new ModelEvent.TextDelta(text)));
+            }
+            events.add(new ModelEvent.MessageComplete(message));
+            return events.stream();
         }
     }
 

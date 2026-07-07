@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * 处理模型对话和工具调用
@@ -72,11 +73,12 @@ public final class AgentLoop {
     /**
      * 处理一轮用户输入，直到模型返回最终文本
      *
+     * <p>最终文本在 {@link ModelEvent.TextDelta} 到达时逐字打印，不再由调用方输出。
+     *
      * @param rawInput 用户原始输入
-     * @return 模型返回的文本块
      * @throws InterruptedException 工具执行被中断
      */
-    public List<String> respond(String rawInput) throws InterruptedException {
+    public void respond(String rawInput) throws InterruptedException {
         // 将用户信息添加到 history
         history.add(MessageParam.builder()
                 .role(MessageParam.Role.USER)
@@ -85,15 +87,12 @@ public final class AgentLoop {
 
         // ReAct 循环
         while (true) {
-            Message response = modelClient.create(createRequest());
+            Message response = receive();
             history.add(response.toParam());
 
-            // 如果模型没有调用工具，则返回文本内容
+            // 如果模型没有调用工具，文本已逐字打印，直接结束。
             if (response.stopReason().filter(StopReason.TOOL_USE::equals).isEmpty()) {
-                return response.content().stream()
-                        .flatMap(block -> block.text().stream())
-                        .map(text -> text.text())
-                        .toList();
+                return;
             }
 
             // 如果模型调用了工具，则按工具名查表执行并将结果添加到 history
@@ -119,6 +118,27 @@ public final class AgentLoop {
                     .content(MessageParam.Content.ofBlockParams(results))
                     .build());
         }
+    }
+
+    /**
+     * 消费一次模型响应的事件流，逐字打印文本并返回完整消息
+     *
+     * @return 完整模型消息
+     * @throws IllegalStateException 事件流未以 {@link ModelEvent.MessageComplete} 收尾
+     */
+    private Message receive() {
+        Message response = null;
+        try (Stream<ModelEvent> events = modelClient.events(createRequest())) {
+            for (var iterator = events.iterator(); iterator.hasNext(); ) {
+                ModelEvent event = iterator.next();
+                if (event instanceof ModelEvent.TextDelta text) {
+                    writeText(text.text());
+                } else if (event instanceof ModelEvent.MessageComplete complete) {
+                    response = complete.message();
+                }
+            }
+        }
+        return Objects.requireNonNull(response, "event stream ended without MessageComplete");
     }
 
     /**
@@ -182,6 +202,22 @@ public final class AgentLoop {
      */
     private void writeLine(String value) {
         terminal.println(value);
+        terminal.flush();
+        if (terminal.checkError()) {
+            throw new IllegalStateException("Unable to write terminal output");
+        }
+    }
+
+    /**
+     * 输出一段不换行的终端文本
+     *
+     * <p>文本增量逐段打印，不补换行：换行是模型输出内容的一部分，由增量本身携带。
+     *
+     * @param value 文本内容
+     * @throws IllegalStateException 输出失败
+     */
+    private void writeText(String value) {
+        terminal.print(value);
         terminal.flush();
         if (terminal.checkError()) {
             throw new IllegalStateException("Unable to write terminal output");
