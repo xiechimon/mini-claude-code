@@ -3,7 +3,6 @@ package com.xmon.nanoagent.core;
 import com.anthropic.models.messages.ContentBlock;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.TextBlock;
 import com.anthropic.services.blocking.MessageService;
 
 import java.util.ArrayList;
@@ -34,15 +33,29 @@ public final class BlockingModelClient implements ModelClient {
     /**
      * 发送请求，把完整消息展开成事件流
      *
+     * <p>按 content block 顺序展开：文本块 → {@link ModelEvent.TextDelta}，工具调用块 →
+     * {@link ModelEvent.ToolUseStart} + {@link ModelEvent.ToolUseDelta}（含完整输入 JSON），
+     * thinking 块 → {@link ModelEvent.ThinkingDelta}。最后以 {@link ModelEvent.MessageComplete} 收尾。
+     *
      * @param request 消息请求参数
-     * @return 事件流，文本块在前、{@link ModelEvent.MessageComplete} 在后
+     * @return 事件流，与流式实现同形
      */
     @Override
     public Stream<ModelEvent> events(MessageCreateParams request) {
         Message message = service.create(request);
         List<ModelEvent> events = new ArrayList<>();
+        int index = 0;
         for (ContentBlock block : message.content()) {
-            block.text().map(TextBlock::text).ifPresent(text -> events.add(new ModelEvent.TextDelta(text)));
+            if (block.isText()) {
+                events.add(new ModelEvent.TextDelta(block.asText().text()));
+            } else if (block.isToolUse()) {
+                var tb = block.asToolUse();
+                events.add(new ModelEvent.ToolUseStart(index, tb.name(), tb.id()));
+                events.add(new ModelEvent.ToolUseDelta(index, tb._input().toString()));
+            } else if (block.isThinking()) {
+                events.add(new ModelEvent.ThinkingDelta(index, block.asThinking().thinking()));
+            }
+            index++;
         }
         events.add(new ModelEvent.MessageComplete(message));
         return events.stream();

@@ -3,8 +3,6 @@ package com.xmon.nanoagent.core;
 import com.anthropic.core.http.StreamResponse;
 import com.anthropic.helpers.MessageAccumulator;
 import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.RawContentBlockDelta;
-import com.anthropic.models.messages.RawContentBlockDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 import com.anthropic.services.blocking.MessageService;
 
@@ -20,6 +18,7 @@ import java.util.stream.Stream;
 public final class StreamingModelClient implements ModelClient {
 
     private final MessageService service;
+    private volatile StreamResponse<?> currentResponse;
 
     /**
      * 创建流式模型客户端
@@ -41,6 +40,7 @@ public final class StreamingModelClient implements ModelClient {
     @Override
     public Stream<ModelEvent> events(MessageCreateParams request) {
         StreamResponse<RawMessageStreamEvent> response = service.createStreaming(request);
+        currentResponse = response;
         MessageAccumulator accumulator = MessageAccumulator.create();
         return response.stream()
                 .map(event -> {
@@ -48,7 +48,24 @@ public final class StreamingModelClient implements ModelClient {
                     return toModelEvent(event, accumulator);
                 })
                 .filter(Objects::nonNull)
-                .onClose(response::close);
+                .onClose(() -> {
+                    currentResponse = null;
+                    response.close();
+                });
+    }
+
+    /**
+     * 取消当前正在进行的请求
+     *
+     * <p>关闭底层 HTTP 连接，使事件流的下一次 {@code next()} 抛出异常。
+     * 信号线程安全：仅设置 volatile 引用 + 调用 OkHttp 的 cancel（线程安全）。
+     */
+    @Override
+    public void cancel() {
+        StreamResponse<?> r = currentResponse;
+        if (r != null) {
+            r.close();
+        }
     }
 
     /**
@@ -59,12 +76,42 @@ public final class StreamingModelClient implements ModelClient {
      * @return 对外事件，本条原始事件不产生对外事件时返回 {@code null}
      */
     private ModelEvent toModelEvent(RawMessageStreamEvent event, MessageAccumulator accumulator) {
-        var text = event.contentBlockDelta()
-                .map(RawContentBlockDeltaEvent::delta)
-                .flatMap(RawContentBlockDelta::text);
-        if (text.isPresent()) {
-            return new ModelEvent.TextDelta(text.get().text());
+        // contentBlockStart：tool_use 块的开始，携带工具名和 ID
+        var blockStart = event.contentBlockStart();
+        if (blockStart.isPresent()) {
+            var start = blockStart.orElseThrow();
+            var toolUse = start.contentBlock().toolUse();
+            if (toolUse.isPresent()) {
+                var tb = toolUse.orElseThrow();
+                return new ModelEvent.ToolUseStart((int) start.index(), tb.name(), tb.id());
+            }
+            // thinking / text 块的 start 不产生事件：内容从 delta 流式到达
+            return null;
         }
+
+        // contentBlockDelta：文本 / input_json / thinking / citations / signature 增量
+        var blockDelta = event.contentBlockDelta();
+        if (blockDelta.isPresent()) {
+            var deltaEvent = blockDelta.orElseThrow();
+            var delta = deltaEvent.delta();
+            int index = (int) deltaEvent.index();
+
+            var text = delta.text();
+            if (text.isPresent()) {
+                return new ModelEvent.TextDelta(text.get().text());
+            }
+            var inputJson = delta.inputJson();
+            if (inputJson.isPresent()) {
+                return new ModelEvent.ToolUseDelta(index, inputJson.get().partialJson());
+            }
+            var thinking = delta.thinking();
+            if (thinking.isPresent()) {
+                return new ModelEvent.ThinkingDelta(index, thinking.get().thinking());
+            }
+            // citations / signature 不对外
+            return null;
+        }
+
         // messageStop 之后累积器给出完整消息；其余事件（start、block stop、message delta 等）不对外。
         if (event.messageStop().isPresent()) {
             return new ModelEvent.MessageComplete(accumulator.message());

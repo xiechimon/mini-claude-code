@@ -60,6 +60,10 @@ public final class Repl {
                 writeLine("");
             } catch (EndOfFileException | UserInterruptException ignored) {
                 return;
+            } catch (InterruptedException ignored) {
+                // 打断：丢弃半截 assistant 消息，回到提示符。不退出进程。
+                Thread.currentThread().interrupt();
+                writeLine("");
             }
         }
     }

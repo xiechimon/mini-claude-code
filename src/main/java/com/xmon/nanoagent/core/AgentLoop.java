@@ -31,6 +31,7 @@ public final class AgentLoop {
     private static final int MAX_PREVIEW_CODE_POINTS = 200;
     private static final String YELLOW = "\033[33m";
     private static final String RED = "\033[31m";
+    private static final String DARK = "\033[2m";
     private static final String RESET = "\033[0m";
 
     /** 会话的权限模式。本课没有改写它的入口，恒为契约的默认模式。 */
@@ -43,6 +44,9 @@ public final class AgentLoop {
     private final String systemPrompt;
     private final PrintWriter terminal;
     private final List<MessageParam> history = new ArrayList<>();
+
+    /** 中断标记：信号线程设 true 后主循环在消费事件流时检查并抛出 InterruptedException */
+    private volatile boolean interrupted;
 
     /**
      * 创建智能体循环
@@ -73,10 +77,11 @@ public final class AgentLoop {
     /**
      * 处理一轮用户输入，直到模型返回最终文本
      *
-     * <p>最终文本在 {@link ModelEvent.TextDelta} 到达时逐字打印，不再由调用方输出。
+     * <p>模型文本增量在 {@link ModelEvent.TextDelta} 到达时逐字打印，
+     * 工具名在 {@link ModelEvent.ToolUseStart} 到达时实时显示。
      *
      * @param rawInput 用户原始输入
-     * @throws InterruptedException 工具执行被中断
+     * @throws InterruptedException 工具执行被中断或模型流被信号打断
      */
     public void respond(String rawInput) throws InterruptedException {
         // 将用户信息添加到 history
@@ -103,8 +108,7 @@ public final class AgentLoop {
                 }
                 ToolUseBlock toolUse = block.toolUse().orElseThrow();
 
-                // 先打印工具名再判权限：用户在被问到之前就看得到模型想做什么。
-                writeLine(YELLOW + "> " + toolUse.name() + RESET);
+                // 工具名已在 ToolUseStart 事件中实时显示，这里只做权限裁决和执行。
                 String output = permit(toolUse);
 
                 results.add(ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
@@ -121,24 +125,50 @@ public final class AgentLoop {
     }
 
     /**
-     * 消费一次模型响应的事件流，逐字打印文本并返回完整消息
+     * 消费一次模型响应的事件流，逐字打印文本、实时显示工具调用与思考，并返回完整消息
      *
      * @return 完整模型消息
+     * @throws InterruptedException 被信号中断
      * @throws IllegalStateException 事件流未以 {@link ModelEvent.MessageComplete} 收尾
      */
-    private Message receive() {
+    private Message receive() throws InterruptedException {
+        interrupted = false;
         Message response = null;
+        int lastToolUseIndex = -1;
         try (Stream<ModelEvent> events = modelClient.events(createRequest())) {
             for (var iterator = events.iterator(); iterator.hasNext(); ) {
+                if (interrupted) {
+                    throw new InterruptedException("interrupted by user");
+                }
                 ModelEvent event = iterator.next();
-                if (event instanceof ModelEvent.TextDelta text) {
-                    writeText(text.text());
-                } else if (event instanceof ModelEvent.MessageComplete complete) {
-                    response = complete.message();
+                switch (event) {
+                    case ModelEvent.TextDelta text -> writeText(text.text());
+                    case ModelEvent.ToolUseStart tool -> {
+                        if (tool.index() != lastToolUseIndex) {
+                            writeLine(YELLOW + "> " + tool.name() + RESET);
+                            lastToolUseIndex = tool.index();
+                        }
+                    }
+                    case ModelEvent.ToolUseDelta delta -> writeText(delta.partialJson());
+                    case ModelEvent.ThinkingDelta think ->
+                            writeText(DARK + think.thinking() + RESET);
+                    case ModelEvent.MessageComplete complete -> response = complete.message();
                 }
             }
         }
         return Objects.requireNonNull(response, "event stream ended without MessageComplete");
+    }
+
+    /**
+     * 中断当前正在进行的模型请求
+     *
+     * <p>信号线程安全：仅设 volatile 标记 + 调用 {@link ModelClient#cancel}，无锁。
+     * 在 HashMap 到达的场景下，信号线程可能恰好没有看到 volatile 写入——但最坏情况
+     * 只是下一轮 receive 才抛异常，不破坏正确性。
+     */
+    public void interrupt() {
+        interrupted = true;
+        modelClient.cancel();
     }
 
     /**

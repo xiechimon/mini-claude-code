@@ -134,10 +134,11 @@ final class AgentLoopTest {
         assertToolResult(results.get(1), "call-2", "from the file");
 
         String progress = terminal.toString();
-        // TOOL_USE 响应里夹带的文本现在也会打印：先「working」，再依次是工具名与预览，最后「done」。
+        // ToolUseStart 在接收阶段实时打印工具名，permit 晚于 ToolUseStart。
+        // 顺序：working → > bash → JSON → > read_file → JSON → first → from the file → done
         assertTrue(progress.startsWith("working"));
-        assertTrue(progress.indexOf("> bash") < progress.indexOf("first\n"));
-        assertTrue(progress.indexOf("first\n") < progress.indexOf("> read_file"));
+        assertTrue(progress.indexOf("> bash") < progress.indexOf("first"));
+        assertTrue(progress.indexOf("> bash") < progress.indexOf("> read_file"));
         assertTrue(progress.indexOf("> read_file") < progress.indexOf("from the file"));
         assertTrue(progress.endsWith("done"));
     }
@@ -152,8 +153,11 @@ final class AgentLoopTest {
         loop(model, terminal).respond("hide arguments");
 
         String progress = terminal.toString();
+        // ToolUseStart 实时打印工具名，ToolUseDelta 随后打印参数 JSON
         assertTrue(progress.contains("\033[33m> bash\033[0m"));
-        assertFalse(progress.contains("printf"));
+        // 参数 JSON 在 ToolUseDelta 中实时可见
+        assertTrue(progress.contains("secret-argument"));
+        assertTrue(progress.contains("done"));
     }
 
     @Test
@@ -188,10 +192,13 @@ final class AgentLoopTest {
         String fullResult = result.content().orElseThrow().asString();
         assertEquals(250, fullResult.codePointCount(0, fullResult.length()));
 
-        // 预览是工具名之后、截断到 200 码点的那一行；后续回合的文本也进 terminal，不能用整串 strip 提取。
-        String preview = terminal.toString().lines().skip(1).findFirst().orElseThrow();
-        assertEquals(200, preview.codePointCount(0, preview.length()));
-        assertTrue(preview.endsWith("😀"));
+        // ToolUseDelta 用 writeText 追加 JSON 到 ToolUseStart 行之后（不换行），
+        // permit() 的 writeLine 追加预览到同一行末尾。终端输出 2 行：> bash + JSON+预览。
+        String line2 = terminal.toString().lines().skip(1).findFirst().orElseThrow();
+        int total = line2.codePointCount(0, line2.length());
+        String tail = line2.substring(line2.offsetByCodePoints(0, total - 200));
+        assertEquals(200, tail.codePointCount(0, tail.length()));
+        assertTrue(tail.endsWith("😀"));
     }
 
     @Test
@@ -390,8 +397,18 @@ final class AgentLoopTest {
             requests.add(request);
             Message message = responses.removeFirst();
             List<ModelEvent> events = new ArrayList<>();
+            int index = 0;
             for (ContentBlock block : message.content()) {
-                block.text().map(TextBlock::text).ifPresent(text -> events.add(new ModelEvent.TextDelta(text)));
+                if (block.isText()) {
+                    events.add(new ModelEvent.TextDelta(block.asText().text()));
+                } else if (block.isToolUse()) {
+                    var tb = block.asToolUse();
+                    events.add(new ModelEvent.ToolUseStart(index, tb.name(), tb.id()));
+                    events.add(new ModelEvent.ToolUseDelta(index, tb._input().toString()));
+                } else if (block.isThinking()) {
+                    events.add(new ModelEvent.ThinkingDelta(index, block.asThinking().thinking()));
+                }
+                index++;
             }
             events.add(new ModelEvent.MessageComplete(message));
             return events.stream();
