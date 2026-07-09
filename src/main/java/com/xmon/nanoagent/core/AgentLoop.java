@@ -108,7 +108,8 @@ public final class AgentLoop {
                 }
                 ToolUseBlock toolUse = block.toolUse().orElseThrow();
 
-                // 工具名已在 ToolUseStart 事件中实时显示，这里只做权限裁决和执行。
+                // 工具名已在 ToolUseStart 事件中实时显示，参数在 ToolUseDelta 中追加。
+                // 块结束时 MessageComplete 负责换行，这里只做权限裁决和执行。
                 String output = permit(toolUse);
 
                 results.add(ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
@@ -135,6 +136,7 @@ public final class AgentLoop {
         interrupted = false;
         Message response = null;
         int lastToolUseIndex = -1;
+        int currentBlockIndex = -1;
         try (Stream<ModelEvent> events = modelClient.events(createRequest())) {
             for (var iterator = events.iterator(); iterator.hasNext(); ) {
                 if (interrupted) {
@@ -144,15 +146,30 @@ public final class AgentLoop {
                 switch (event) {
                     case ModelEvent.TextDelta text -> writeText(text.text());
                     case ModelEvent.ToolUseStart tool -> {
-                        if (tool.index() != lastToolUseIndex) {
-                            writeLine(YELLOW + "> " + tool.name() + RESET);
-                            lastToolUseIndex = tool.index();
+                        if (currentBlockIndex >= 0) {
+                            writeLine("");
                         }
+                        writeLine(YELLOW + "> " + tool.name() + RESET);
+                        lastToolUseIndex = tool.index();
+                        currentBlockIndex = tool.index();
                     }
-                    case ModelEvent.ToolUseDelta delta -> writeText(delta.partialJson());
-                    case ModelEvent.ThinkingDelta think ->
-                            writeText(DARK + think.thinking() + RESET);
-                    case ModelEvent.MessageComplete complete -> response = complete.message();
+                    case ModelEvent.ToolUseDelta delta -> {
+                        writeText(delta.partialJson());
+                        currentBlockIndex = delta.index();
+                    }
+                    case ModelEvent.ThinkingDelta think -> {
+                        if (think.index() != currentBlockIndex && currentBlockIndex >= 0) {
+                            writeLine("");
+                        }
+                        writeText(DARK + think.thinking() + RESET);
+                        currentBlockIndex = think.index();
+                    }
+                    case ModelEvent.MessageComplete complete -> {
+                        if (currentBlockIndex >= 0) {
+                            writeLine("");
+                        }
+                        response = complete.message();
+                    }
                 }
             }
         }

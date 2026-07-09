@@ -192,13 +192,10 @@ final class AgentLoopTest {
         String fullResult = result.content().orElseThrow().asString();
         assertEquals(250, fullResult.codePointCount(0, fullResult.length()));
 
-        // ToolUseDelta 用 writeText 追加 JSON 到 ToolUseStart 行之后（不换行），
-        // permit() 的 writeLine 追加预览到同一行末尾。终端输出 2 行：> bash + JSON+预览。
-        String line2 = terminal.toString().lines().skip(1).findFirst().orElseThrow();
-        int total = line2.codePointCount(0, line2.length());
-        String tail = line2.substring(line2.offsetByCodePoints(0, total - 200));
-        assertEquals(200, tail.codePointCount(0, tail.length()));
-        assertTrue(tail.endsWith("😀"));
+        // 输出 3 行：> bash（ToolUseStart）、命令 JSON（ToolUseDelta）、预览（permit）。
+        String preview = terminal.toString().lines().skip(2).findFirst().orElseThrow();
+        assertEquals(200, preview.codePointCount(0, preview.length()));
+        assertTrue(preview.endsWith("😀"));
     }
 
     @Test
