@@ -135,8 +135,8 @@ public final class AgentLoop {
     private Message receive() throws InterruptedException {
         interrupted = false;
         Message response = null;
-        int lastToolUseIndex = -1;
-        int currentBlockIndex = -1;
+        // 追块类型而非 index：TextDelta 没有 index，用 index 追踪会漏掉文本块。
+        String lastBlockType = null;
         try (Stream<ModelEvent> events = modelClient.events(createRequest())) {
             for (var iterator = events.iterator(); iterator.hasNext(); ) {
                 if (interrupted) {
@@ -144,32 +144,29 @@ public final class AgentLoop {
                 }
                 ModelEvent event = iterator.next();
                 switch (event) {
-                    case ModelEvent.TextDelta text -> writeText(text.text());
+                    case ModelEvent.TextDelta text -> {
+                        if (lastBlockType != null && !"text".equals(lastBlockType)) {
+                            writeLine("");
+                        }
+                        writeText(text.text());
+                        lastBlockType = "text";
+                    }
                     case ModelEvent.ToolUseStart tool -> {
-                        if (currentBlockIndex >= 0) {
+                        if (lastBlockType != null) {
                             writeLine("");
                         }
                         writeLine(YELLOW + "> " + tool.name() + RESET);
-                        lastToolUseIndex = tool.index();
-                        currentBlockIndex = tool.index();
+                        lastBlockType = "tool_use";
                     }
-                    case ModelEvent.ToolUseDelta delta -> {
-                        writeText(delta.partialJson());
-                        currentBlockIndex = delta.index();
-                    }
+                    case ModelEvent.ToolUseDelta delta -> writeText(delta.partialJson());
                     case ModelEvent.ThinkingDelta think -> {
-                        if (think.index() != currentBlockIndex && currentBlockIndex >= 0) {
+                        if (lastBlockType != null && !"thinking".equals(lastBlockType)) {
                             writeLine("");
                         }
                         writeText(DARK + think.thinking() + RESET);
-                        currentBlockIndex = think.index();
+                        lastBlockType = "thinking";
                     }
-                    case ModelEvent.MessageComplete complete -> {
-                        if (currentBlockIndex >= 0) {
-                            writeLine("");
-                        }
-                        response = complete.message();
-                    }
+                    case ModelEvent.MessageComplete complete -> response = complete.message();
                 }
             }
         }

@@ -9,6 +9,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.TextBlock;
+import com.anthropic.models.messages.ThinkingBlock;
 import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
 import com.anthropic.models.messages.ToolUseBlock;
@@ -161,6 +162,24 @@ final class AgentLoopTest {
     }
 
     @Test
+    void thinkingBlockEndsWithNewlineBeforeNextBlock() throws Exception {
+        FakeModelClient model = new FakeModelClient(
+                message(StopReason.END_TURN,
+                        thinking("let me think about this"),
+                        text("answer")));
+        StringWriter terminal = new StringWriter();
+
+        loop(model, terminal).respond("test");
+
+        String progress = terminal.toString();
+        int thinkingEnd = progress.indexOf("let me think about this") + "let me think about this".length();
+        int answerStart = progress.indexOf("answer");
+        assertTrue(answerStart > thinkingEnd, "thinking 和 answer 顺序不对");
+        String between = progress.substring(thinkingEnd, answerStart);
+        assertTrue(between.contains("\n"), "thinking 和文本之间应该有换行，实际: " + between);
+    }
+
+    @Test
     void unregisteredToolNameIsFilledBackWithoutStoppingTheLoop() throws Exception {
         FakeModelClient model = new FakeModelClient(
                 message(StopReason.TOOL_USE, toolUse("call", "grep", Map.of("pattern", "todo"))),
@@ -192,10 +211,13 @@ final class AgentLoopTest {
         String fullResult = result.content().orElseThrow().asString();
         assertEquals(250, fullResult.codePointCount(0, fullResult.length()));
 
-        // 输出 3 行：> bash（ToolUseStart）、命令 JSON（ToolUseDelta）、预览（permit）。
-        String preview = terminal.toString().lines().skip(2).findFirst().orElseThrow();
-        assertEquals(200, preview.codePointCount(0, preview.length()));
-        assertTrue(preview.endsWith("😀"));
+        // 输出 2 行：> bash（ToolUseStart）、JSON+预览（ToolUseDelta 不换行，permit 追加到同行）。
+        // 预览在第二行末尾。
+        String line1 = terminal.toString().lines().skip(1).findFirst().orElseThrow();
+        int total = line1.codePointCount(0, line1.length());
+        String tail = line1.substring(line1.offsetByCodePoints(0, total - 200));
+        assertEquals(200, tail.codePointCount(0, tail.length()));
+        assertTrue(tail.endsWith("😀"));
     }
 
     @Test
@@ -355,6 +377,10 @@ final class AgentLoopTest {
                 .input(JsonValue.from(input))
                 .name(name)
                 .build());
+    }
+
+    private static ContentBlock thinking(String value) {
+        return ContentBlock.ofThinking(ThinkingBlock.builder().thinking(value).signature("sig").build());
     }
 
     private static Message message(StopReason stopReason, ContentBlock... content) {
