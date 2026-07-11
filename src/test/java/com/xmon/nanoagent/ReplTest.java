@@ -13,6 +13,8 @@ import com.xmon.nanoagent.core.AgentLoop;
 import com.xmon.nanoagent.core.ModelClient;
 import com.xmon.nanoagent.core.ModelEvent;
 import com.xmon.nanoagent.host.Workspace;
+import com.xmon.nanoagent.core.MarkdownRenderer;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
 import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.permission.PermissionRule;
 import com.xmon.nanoagent.permission.TerminalApprovalPrompt;
@@ -67,7 +69,7 @@ final class ReplTest {
                 输入问题，回车发送。输入 q 退出。
 
                 firstsecond
-                """, output.toString());
+                """.trim(), output.toString().trim());
     }
 
     @ParameterizedTest
@@ -127,7 +129,8 @@ final class ReplTest {
                 permitAll(),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(output));
+                new PrintWriter(output),
+                new MarkdownRenderer(new PrintWriter(output), new DefaultMarkdownTheme()));
     }
 
     @Test
@@ -148,7 +151,8 @@ final class ReplTest {
                         new TerminalApprovalPrompt(reader, new PrintWriter(output))),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(output));
+                new PrintWriter(output),
+                new MarkdownRenderer(new PrintWriter(output), new DefaultMarkdownTheme()));
 
         assertDoesNotThrow(() -> new Repl(reader, new PrintWriter(output), agentLoop).run());
         assertEquals(1, model.requests.size());

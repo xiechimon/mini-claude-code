@@ -15,6 +15,10 @@ import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.permission.PermissionRule;
 import com.xmon.nanoagent.tool.BashTool;
 import com.xmon.nanoagent.tool.ToolRegistry;
+import com.xmon.nanoagent.core.MarkdownRenderer;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
+import com.xmon.nanoagent.core.MarkdownRenderer;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,7 +56,7 @@ final class AgentLoopEndToEndTest {
         StringWriter terminal = new StringWriter();
         loop(model, unexpectedApproval(), terminal).respond("创建 hello.py");
 
-        assertTrue(terminal.toString().endsWith("created"));
+        assertTrue(terminal.toString().endsWith("created\n"), "terminal: " + terminal.toString());
         assertEquals("print(\"Hello, world!\")\n", Files.readString(workingDirectory.resolve("hello.py")));
         assertEquals("(no output)", toolResultSentToSecondRequest(model));
     }
@@ -101,7 +105,7 @@ final class AgentLoopEndToEndTest {
         loop(model, unexpectedApproval(), terminal).respond(
                 "Read the file README.md and tell me what this project is about");
 
-        assertTrue(terminal.toString().endsWith("这是一个学习项目"));
+        assertTrue(terminal.toString().endsWith("这是一个学习项目\n"), "terminal: " + terminal.toString());
 
         assertEquals("# Nano Agent\n一个学习项目。", toolResultSentToSecondRequest(model));
     }
@@ -268,7 +272,8 @@ final class AgentLoopEndToEndTest {
                 new PermissionGate(PermissionRule.defaults(workspace), approvalPrompt),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(terminal));
+                new PrintWriter(terminal),
+                new MarkdownRenderer(new PrintWriter(terminal), new DefaultMarkdownTheme()));
     }
 
     private static ApprovalPrompt unexpectedApproval() {

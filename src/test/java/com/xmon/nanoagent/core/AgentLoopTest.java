@@ -18,6 +18,10 @@ import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.tool.BashTool;
 import com.xmon.nanoagent.tool.ToolRegistry;
+import com.xmon.nanoagent.core.MarkdownRenderer;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
+import com.xmon.nanoagent.core.MarkdownRenderer;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -59,7 +63,7 @@ final class AgentLoopTest {
 
         loop.respond("  keep my spaces  ");
 
-        assertEquals("firstsecond", terminal.toString());
+        assertEquals("firstsecond\n", terminal.toString());
         MessageCreateParams request = model.requests.getFirst();
         assertEquals("test-model", request.model().asString());
         assertEquals(8_000L, request.maxTokens());
@@ -141,7 +145,7 @@ final class AgentLoopTest {
         assertTrue(progress.indexOf("> bash") < progress.indexOf("first"));
         assertTrue(progress.indexOf("> bash") < progress.indexOf("> read_file"));
         assertTrue(progress.indexOf("> read_file") < progress.indexOf("from the file"));
-        assertTrue(progress.endsWith("done"));
+        assertTrue(progress.endsWith("done\n"), "terminal: " + progress);
     }
 
     @Test
@@ -291,7 +295,8 @@ final class AgentLoopTest {
                 permitAll(),
                 "test-model",
                 workingDirectory,
-                failingWriter);
+                failingWriter,
+                new MarkdownRenderer(failingWriter, new DefaultMarkdownTheme()));
 
         assertThrows(IllegalStateException.class, () -> loop.respond("write progress"));
     }
@@ -320,7 +325,8 @@ final class AgentLoopTest {
                 permitAll(),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(new StringWriter()));
+                new PrintWriter(new StringWriter()),
+                new MarkdownRenderer(new PrintWriter(new java.io.StringWriter()), new DefaultMarkdownTheme()));
 
         assertEquals(modelFailure, assertThrows(IllegalStateException.class, () -> loop.respond("fail")));
     }
@@ -346,7 +352,8 @@ final class AgentLoopTest {
                 permitAll(),
                 "test-model",
                 workingDirectory,
-                new PrintWriter(terminal));
+                new PrintWriter(terminal),
+                new MarkdownRenderer(new PrintWriter(terminal), new DefaultMarkdownTheme()));
     }
 
     private ToolRegistry toolRegistry() throws IOException {

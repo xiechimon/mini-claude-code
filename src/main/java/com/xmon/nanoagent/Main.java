@@ -3,6 +3,8 @@ package com.xmon.nanoagent;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.xmon.nanoagent.core.AgentLoop;
+import com.xmon.nanoagent.core.DefaultMarkdownTheme;
+import com.xmon.nanoagent.core.MarkdownRenderer;
 import com.xmon.nanoagent.core.ModelClient;
 import com.xmon.nanoagent.core.StreamingModelClient;
 import com.xmon.nanoagent.host.EffectiveEnvironment;
@@ -17,7 +19,6 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.terminal.Terminal.Signal;
-import org.jline.terminal.Terminal.SignalHandler;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
@@ -57,7 +58,8 @@ public final class Main {
             // 默认走流式；非流式实现 BlockingModelClient 同样产出事件流，仅用于测试与对照。
             ModelClient modelClient = new StreamingModelClient(client.messages());
             AgentLoop agentLoop = new AgentLoop(
-                    modelClient, toolRegistry, permissionGate, modelId, workingDirectory, output);
+                    modelClient, toolRegistry, permissionGate, modelId, workingDirectory, output,
+                    new MarkdownRenderer(output, new DefaultMarkdownTheme()));
             // 回合期间 Ctrl+C → SIGINT → 打断模型流，回到提示符。readLine 期间终端 raw 模式
             // 天然不触发 SIGINT，提示符行为不受影响。
             terminal.handle(Signal.INT, signal -> agentLoop.interrupt());

@@ -43,6 +43,7 @@ public final class AgentLoop {
     private final String modelId;
     private final String systemPrompt;
     private final PrintWriter terminal;
+    private final MarkdownRenderer markdown;
     private final List<MessageParam> history = new ArrayList<>();
 
     /** 中断标记：信号线程设 true 后主循环在消费事件流时检查并抛出 InterruptedException */
@@ -57,6 +58,7 @@ public final class AgentLoop {
      * @param modelId 模型标识
      * @param workingDirectory 工作目录
      * @param terminal 终端输出
+     * @param markdown  markdown 渲染器
      */
     public AgentLoop(
             ModelClient modelClient,
@@ -64,7 +66,8 @@ public final class AgentLoop {
             PermissionGate permissionGate,
             String modelId,
             Path workingDirectory,
-            PrintWriter terminal) {
+            PrintWriter terminal,
+            MarkdownRenderer markdown) {
         this.modelClient = Objects.requireNonNull(modelClient);
         this.toolRegistry = Objects.requireNonNull(toolRegistry);
         this.permissionGate = Objects.requireNonNull(permissionGate);
@@ -72,6 +75,7 @@ public final class AgentLoop {
         this.systemPrompt = "You are a coding agent at " + Objects.requireNonNull(workingDirectory)
                 + ". Use tools to solve tasks. Act, don't explain.";
         this.terminal = Objects.requireNonNull(terminal);
+        this.markdown = Objects.requireNonNull(markdown);
     }
 
     /**
@@ -135,7 +139,6 @@ public final class AgentLoop {
     private Message receive() throws InterruptedException {
         interrupted = false;
         Message response = null;
-        // 追块类型而非 index：TextDelta 没有 index，用 index 追踪会漏掉文本块。
         String lastBlockType = null;
         try (Stream<ModelEvent> events = modelClient.events(createRequest())) {
             for (var iterator = events.iterator(); iterator.hasNext(); ) {
@@ -147,11 +150,13 @@ public final class AgentLoop {
                     case ModelEvent.TextDelta text -> {
                         if (lastBlockType != null && !"text".equals(lastBlockType)) {
                             writeLine("");
+                            markdown.flush();
                         }
-                        writeText(text.text());
+                        markdown.append(text.text());
                         lastBlockType = "text";
                     }
                     case ModelEvent.ToolUseStart tool -> {
+                        markdown.flush();
                         if (lastBlockType != null) {
                             writeLine("");
                         }
@@ -160,13 +165,17 @@ public final class AgentLoop {
                     }
                     case ModelEvent.ToolUseDelta delta -> writeText(delta.partialJson());
                     case ModelEvent.ThinkingDelta think -> {
+                        markdown.flush();
                         if (lastBlockType != null && !"thinking".equals(lastBlockType)) {
                             writeLine("");
                         }
                         writeText(DARK + think.thinking() + RESET);
                         lastBlockType = "thinking";
                     }
-                    case ModelEvent.MessageComplete complete -> response = complete.message();
+                    case ModelEvent.MessageComplete complete -> {
+                        markdown.flush();
+                        response = complete.message();
+                    }
                 }
             }
         }
