@@ -15,6 +15,7 @@ import com.vladsch.flexmark.ast.StrongEmphasis;
 import com.vladsch.flexmark.ast.Text;
 import com.vladsch.flexmark.ast.ThematicBreak;
 import com.vladsch.flexmark.ext.gfm.strikethrough.Strikethrough;
+import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.MutableDataSet;
@@ -49,7 +50,9 @@ public final class MarkdownRenderer {
     public MarkdownRenderer(PrintWriter terminal, MarkdownTheme theme) {
         this.terminal = Objects.requireNonNull(terminal, "terminal");
         this.theme = Objects.requireNonNull(theme, "theme");
-        this.parser = Parser.builder(new MutableDataSet()).build();
+        this.parser = Parser.builder(new MutableDataSet())
+                .extensions(List.of(StrikethroughExtension.create()))
+                .build();
     }
 
     /**
@@ -123,7 +126,12 @@ public final class MarkdownRenderer {
             } else if (child instanceof FencedCodeBlock code) {
                 String info = code.getInfo() != null ? code.getInfo().toString() : "";
                 lines.add(theme.codeBlockBorder("```" + info));
-                for (String codeLine : code.getContentChars().toString().split("\n", -1)) {
+                // flexmark 的代码内容自带结尾换行，去掉它避免多渲染一行空代码行
+                String content = code.getContentChars().toString();
+                if (content.endsWith("\n")) {
+                    content = content.substring(0, content.length() - 1);
+                }
+                for (String codeLine : content.split("\n", -1)) {
                     lines.add(theme.codeBlock("  " + codeLine));
                 }
                 lines.add(theme.codeBlockBorder("```"));
