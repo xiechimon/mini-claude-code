@@ -8,6 +8,7 @@ import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.ToolResultBlockParam;
 import com.anthropic.models.messages.ToolUseBlock;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.xmon.nanoagent.permission.PermissionDecision;
 import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.permission.PermissionMode;
@@ -18,6 +19,7 @@ import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -28,7 +30,6 @@ import java.util.stream.Stream;
 public final class AgentLoop {
 
     private static final long MAX_TOKENS = 8_000L;
-    private static final int MAX_PREVIEW_CODE_POINTS = 200;
     private static final String YELLOW = "\033[33m";
     private static final String RED = "\033[31m";
     private static final String DARK = "\033[2m";
@@ -112,8 +113,8 @@ public final class AgentLoop {
                 }
                 ToolUseBlock toolUse = block.toolUse().orElseThrow();
 
-                // 工具名已在 ToolUseStart 事件中实时显示，参数在 ToolUseDelta 中追加。
-                // 块结束时 MessageComplete 负责换行，这里只做权限裁决和执行。
+                // 工具名已在 ToolUseStart 中显示，这里格式化参数并执行。
+                displayToolInput(toolUse);
                 String output = permit(toolUse);
 
                 results.add(ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
@@ -163,7 +164,7 @@ public final class AgentLoop {
                         writeLine(YELLOW + "> " + tool.name() + RESET);
                         lastBlockType = "tool_use";
                     }
-                    case ModelEvent.ToolUseDelta delta -> writeText(delta.partialJson());
+                    case ModelEvent.ToolUseDelta ignored -> { /* 静默累积，参数在 respond() 中格式化显示 */ }
                     case ModelEvent.ThinkingDelta think -> {
                         markdown.flush();
                         if (lastBlockType != null && !"thinking".equals(lastBlockType)) {
@@ -212,7 +213,7 @@ public final class AgentLoop {
             return denied.message();
         }
         String output = execute(toolUse);
-        writeLine(prefixByCodePoint(output, MAX_PREVIEW_CODE_POINTS));
+        writeLine(output);
         return output;
     }
 
@@ -278,16 +279,17 @@ public final class AgentLoop {
     }
 
     /**
-     * 按 Unicode 码点截取文本前缀
+     * 格式化显示工具调用参数
      *
-     * @param value 原始文本
-     * @param maximumCodePoints 最大码点数
-     * @return 文本前缀
+     * <p>将 {@link ToolUseBlock#_input()} 解码为 Map，逐字段以暗色样式显示，
+     * 让用户看到的是可读的参数名和值，而不是原始 JSON 碎片。
+     *
+     * @param toolUse 模型发起的工具调用
      */
-    private static String prefixByCodePoint(String value, int maximumCodePoints) {
-        if (value.codePointCount(0, value.length()) <= maximumCodePoints) {
-            return value;
+    private void displayToolInput(ToolUseBlock toolUse) {
+        Map<String, Object> input = toolUse._input().convert(new TypeReference<>() {});
+        for (var entry : input.entrySet()) {
+            writeLine(DARK + "  " + entry.getKey() + ": " + entry.getValue() + RESET);
         }
-        return value.substring(0, value.offsetByCodePoints(0, maximumCodePoints));
     }
 }

@@ -139,8 +139,8 @@ final class AgentLoopTest {
         assertToolResult(results.get(1), "call-2", "from the file");
 
         String progress = terminal.toString();
-        // ToolUseStart 在接收阶段实时打印工具名，permit 晚于 ToolUseStart。
-        // 顺序：working → > bash → JSON → > read_file → JSON → first → from the file → done
+        // ToolUseStart 在接收阶段实时打印工具名，displayToolInput 在 respond 中格式化显示参数。
+        // 顺序：working → > bash → 参数 → > read_file → 参数 → first → from the file → done
         assertTrue(progress.startsWith("working"));
         assertTrue(progress.indexOf("> bash") < progress.indexOf("first"));
         assertTrue(progress.indexOf("> bash") < progress.indexOf("> read_file"));
@@ -149,7 +149,7 @@ final class AgentLoopTest {
     }
 
     @Test
-    void toolPreviewShowsTheToolNameWithoutItsArguments() throws Exception {
+    void toolParametersAreFormattedAfterToolName() throws Exception {
         FakeModelClient model = new FakeModelClient(
                 message(StopReason.TOOL_USE, toolUse("call", "bash", Map.of("command", "printf secret-argument"))),
                 message(StopReason.END_TURN, text("done")));
@@ -158,10 +158,10 @@ final class AgentLoopTest {
         loop(model, terminal).respond("hide arguments");
 
         String progress = terminal.toString();
-        // ToolUseStart 实时打印工具名，ToolUseDelta 随后打印参数 JSON
+        // ToolUseStart 实时打印工具名，displayToolInput 随后格式化显示参数
         assertTrue(progress.contains("\033[33m> bash\033[0m"));
-        // 参数 JSON 在 ToolUseDelta 中实时可见
-        assertTrue(progress.contains("secret-argument"));
+        // 参数以 "  key: value" 暗色格式显示，不含原始 JSON
+        assertTrue(progress.contains("command: printf secret-argument"));
         assertTrue(progress.contains("done"));
     }
 
@@ -198,7 +198,7 @@ final class AgentLoopTest {
     }
 
     @Test
-    void toolPreviewIsTwoHundredCodePointsButModelReceivesTheFullResult() throws Exception {
+    void toolOutputIsNotTruncatedAndModelReceivesTheFullResult() throws Exception {
         String command = "printf '" + "😀".repeat(250) + "'";
         FakeModelClient model = new FakeModelClient(
                 message(StopReason.TOOL_USE, toolUse("long-call", "bash", Map.of("command", command))),
@@ -215,13 +215,8 @@ final class AgentLoopTest {
         String fullResult = result.content().orElseThrow().asString();
         assertEquals(250, fullResult.codePointCount(0, fullResult.length()));
 
-        // 输出 2 行：> bash（ToolUseStart）、JSON+预览（ToolUseDelta 不换行，permit 追加到同行）。
-        // 预览在第二行末尾。
-        String line1 = terminal.toString().lines().skip(1).findFirst().orElseThrow();
-        int total = line1.codePointCount(0, line1.length());
-        String tail = line1.substring(line1.offsetByCodePoints(0, total - 200));
-        assertEquals(200, tail.codePointCount(0, tail.length()));
-        assertTrue(tail.endsWith("😀"));
+        // 不再截断，终端输出应包含完整结果
+        assertTrue(terminal.toString().contains("😀".repeat(250)));
     }
 
     @Test
