@@ -42,6 +42,13 @@ public final class MarkdownRenderer {
     private int lastLineCount;
 
     /**
+     * flush 时缓冲区末尾若处于未闭合代码块，置 true，等待下一次 append 开头
+     * 出现的孤悬 ``` 作为该代码块的关闭吃下，避免把它当新代码块开头产生
+     * 重复边框。
+     */
+    private boolean expectClosingFence;
+
+    /**
      * 创建渲染器
      *
      * @param terminal 终端输出
@@ -61,6 +68,28 @@ public final class MarkdownRenderer {
      * @param text 一段 markdown 文本
      */
     public void append(String text) {
+        // 等待中的关闭 fence：把下一次 append 开头孤悬的 ``` 当作上一代码块的关闭吃下，
+        // 避免它被当作新代码块的开头渲染出重复的边框。
+        if (expectClosingFence && text.startsWith("```")) {
+            expectClosingFence = false;
+            int fenceEnd = text.indexOf('\n');
+            if (fenceEnd == "```".length()) {
+                String tail = text.substring(fenceEnd + 1);
+                if (!tail.isEmpty()) {
+                    buffer.append(tail);
+                    render();
+                }
+                return;
+            }
+            if (text.equals("```") || text.equals("```\n")) {
+                return;
+            }
+            // 不只是孤悬 ```，例如 ```python\n…：按新内容正常处理
+            buffer.append(text);
+            render();
+            return;
+        }
+        expectClosingFence = false;
         buffer.append(text);
         render();
     }
@@ -83,6 +112,10 @@ public final class MarkdownRenderer {
         terminal.flush();
         buffer.setLength(0);
         lastLineCount = 0;
+        // 检测末尾是否处于未闭合代码块，若是，等待下一次的孤悬 ``` 作为关闭
+        Node document = parser.parse(flushed);
+        Node lastChild = document.getLastChild();
+        expectClosingFence = lastChild instanceof FencedCodeBlock;
     }
 
     /**
@@ -101,7 +134,9 @@ public final class MarkdownRenderer {
             terminal.println(newLines.get(i));
         }
         terminal.flush();
-        lastLineCount = completeCount;
+        // 只增不减：未闭合代码块会临时吞掉已渲染过的行（见 renderBlockChildren 的 fence 分支），
+        // 行数因此会随增量下降。若跟着回退，后续增量会从更小的下标重新输出，把已打印的行再打一遍。
+        lastLineCount = Math.max(lastLineCount, completeCount);
     }
 
     /**
@@ -110,14 +145,14 @@ public final class MarkdownRenderer {
     private List<String> parseAndRender(String source) {
         Node document = parser.parse(source);
         List<String> lines = new ArrayList<>();
-        renderBlockChildren(document, lines);
+        renderBlockChildren(document, lines, source);
         return lines;
     }
 
     /**
      * 递归渲染块级子节点
      */
-    private void renderBlockChildren(Node parent, List<String> lines) {
+    private void renderBlockChildren(Node parent, List<String> lines, String source) {
         for (Node child : parent.getChildren()) {
             if (child instanceof Heading h) {
                 lines.add(theme.heading(renderInlineChildren(h), h.getLevel()));
@@ -126,15 +161,19 @@ public final class MarkdownRenderer {
             } else if (child instanceof FencedCodeBlock code) {
                 String info = code.getInfo() != null ? code.getInfo().toString() : "";
                 lines.add(theme.codeBlockBorder("```" + info));
-                // flexmark 的代码内容自带结尾换行，去掉它避免多渲染一行空代码行
                 String content = code.getContentChars().toString();
                 if (content.endsWith("\n")) {
                     content = content.substring(0, content.length() - 1);
                 }
-                for (String codeLine : content.split("\n", -1)) {
-                    lines.add(theme.codeBlock("  " + codeLine));
+                // 仅当 source 中存在关闭 fence（第二个 ```）时才渲染内容行和关闭边框。
+                // 未闭合的代码块在流式渲染中，内容行会随增量到达而改变行数，
+                // 提前输出会令 lastLineCount 越过后续真实内容行的索引，导致内容永久丢失。
+                if (source.indexOf("```") != source.lastIndexOf("```")) {
+                    for (String codeLine : content.split("\n", -1)) {
+                        lines.add(theme.codeBlock("  " + codeLine));
+                    }
+                    lines.add(theme.codeBlockBorder("```"));
                 }
-                lines.add(theme.codeBlockBorder("```"));
             } else if (child instanceof BulletList list) {
                 for (Node item : list.getChildren()) {
                     if (item instanceof BulletListItem li) {
@@ -156,8 +195,7 @@ public final class MarkdownRenderer {
             } else if (child instanceof ThematicBreak) {
                 lines.add(theme.hr());
             } else {
-                // 未知块类型：递归渲染子节点
-                renderBlockChildren(child, lines);
+                renderBlockChildren(child, lines, source);
             }
         }
     }
