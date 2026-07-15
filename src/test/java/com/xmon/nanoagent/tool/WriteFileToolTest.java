@@ -47,12 +47,12 @@ final class WriteFileToolTest {
     }
 
     @Test
-    void reportedByteCountIsTheCharacterCountOfTheContent() throws Exception {
-        // 课程文案写的是 bytes，计数口径却是字符数；多字节字符下二者并不相同。
-        assertEquals("Wrote 2 bytes to u.txt", write("u.txt", "你好"));
+    void reportedByteCountIsUtf8Bytes() throws Exception {
+        // 文案说 bytes 就是 UTF-8 字节数：磁盘上以 UTF-8 写入，多字节字符下与 codePointCount 不一致。
+        assertEquals("Wrote 6 bytes to u.txt", write("u.txt", "你好"));
         assertEquals(6, Files.readAllBytes(workingDirectory.resolve("u.txt")).length);
 
-        assertEquals("Wrote 1 bytes to emo.txt", write("emo.txt", "🙂"));
+        assertEquals("Wrote 4 bytes to emo.txt", write("emo.txt", "🙂"));
         assertEquals(4, Files.readAllBytes(workingDirectory.resolve("emo.txt")).length);
     }
 

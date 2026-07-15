@@ -43,9 +43,8 @@ public final class WriteFileTool implements ToolHandler {
                 Files.createDirectories(parent);
             }
             Files.writeString(file, decoded.content(), StandardCharsets.UTF_8);
-            // 课程源码的计数口径是字符数而非字节数，文案与实际字节数在多字节字符下并不一致。
-            String content = decoded.content();
-            return "Wrote " + content.codePointCount(0, content.length()) + " bytes to " + decoded.path();
+            // 文案说 bytes 就是 UTF-8 字节数：磁盘上是 UTF-8 写入，多字节字符下与 codePointCount 不一致。
+            return "Wrote " + decoded.content().getBytes(StandardCharsets.UTF_8).length + " bytes to " + decoded.path();
         } catch (IOException | RuntimeException failure) {
             return "Error: " + failure;
         }
