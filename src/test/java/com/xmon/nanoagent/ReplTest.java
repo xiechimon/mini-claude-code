@@ -9,6 +9,7 @@ import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.TextBlock;
 import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.Usage;
+import com.xmon.nanoagent.hook.HookDispatcher;
 import com.xmon.nanoagent.core.AgentLoop;
 import com.xmon.nanoagent.core.ModelClient;
 import com.xmon.nanoagent.core.ModelEvent;
@@ -108,6 +109,18 @@ final class ReplTest {
     }
 
     /**
+     * 构造不注册任何 hook 的分发器
+     *
+     * <p>本类验证的是 REPL 交互而非 hook 机制，因此注册表留空。hook 机制本身由
+     * {@code HookDispatcherTest} 与 {@code CommandHookRunnerTest} 覆盖。
+     *
+     * @return 空的 hook 分发器
+     */
+    private HookDispatcher noHooks() {
+        return new HookDispatcher("test-session", workingDirectory, "default", Map.of());
+    }
+
+    /**
      * 构造不设任何规则的权限闸门
      *
      * <p>本类验证的是 REPL 交互而非权限策略，因此规则表留空；审批器一旦被调用即断言失败。
@@ -127,6 +140,7 @@ final class ReplTest {
                         new BashTool(workingDirectory, Map.of(), Duration.ofSeconds(2)),
                         new Workspace(workingDirectory)),
                 permitAll(),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(output),
@@ -149,6 +163,7 @@ final class ReplTest {
                 new PermissionGate(
                         PermissionRule.defaults(workspace),
                         new TerminalApprovalPrompt(reader, new PrintWriter(output))),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(output),

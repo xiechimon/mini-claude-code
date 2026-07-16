@@ -7,9 +7,12 @@ import com.xmon.nanoagent.core.DefaultMarkdownTheme;
 import com.xmon.nanoagent.core.MarkdownRenderer;
 import com.xmon.nanoagent.core.ModelClient;
 import com.xmon.nanoagent.core.StreamingModelClient;
+import com.xmon.nanoagent.hook.HookDispatcher;
+import com.xmon.nanoagent.hook.SettingsHooks;
 import com.xmon.nanoagent.host.EffectiveEnvironment;
 import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.PermissionGate;
+import com.xmon.nanoagent.permission.PermissionMode;
 import com.xmon.nanoagent.permission.PermissionRule;
 import com.xmon.nanoagent.permission.TerminalApprovalPrompt;
 import com.xmon.nanoagent.tool.BashTool;
@@ -22,6 +25,7 @@ import org.jline.terminal.Terminal.Signal;
 
 import java.io.PrintWriter;
 import java.nio.file.Path;
+import java.util.UUID;
 
 /**
  * 启动命令行智能体
@@ -55,11 +59,19 @@ public final class Main {
             ToolRegistry toolRegistry = new ToolRegistry(bashTool, workspace);
             PermissionGate permissionGate = new PermissionGate(
                     PermissionRule.defaults(workspace), new TerminalApprovalPrompt(input, output));
+            // hook 配置来自工作区的 .claude/settings.json。配置错误在这里抛出而不是运行时静默跳过：
+            // 装不上的闸门必须启动即知。
+            HookDispatcher hooks = new HookDispatcher(
+                    UUID.randomUUID().toString(),
+                    workingDirectory,
+                    PermissionMode.DEFAULT.contractValue(),
+                    environment.values());
+            hooks.registerAll(SettingsHooks.read(workspace));
             // 默认走流式；非流式实现 BlockingModelClient 同样产出事件流，仅用于测试与对照。
             ModelClient modelClient = new StreamingModelClient(client.messages());
             AgentLoop agentLoop = new AgentLoop(
-                    modelClient, toolRegistry, permissionGate, modelId, workingDirectory, output,
-                    new MarkdownRenderer(output, new DefaultMarkdownTheme()));
+                    modelClient, toolRegistry, permissionGate, hooks, modelId, workingDirectory,
+                    output, new MarkdownRenderer(output, new DefaultMarkdownTheme()));
             // 回合期间 Ctrl+C → SIGINT → 打断模型流，回到提示符。readLine 期间终端 raw 模式
             // 天然不触发 SIGINT，提示符行为不受影响。
             terminal.handle(Signal.INT, signal -> agentLoop.interrupt());

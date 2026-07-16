@@ -9,6 +9,7 @@ import com.anthropic.models.messages.StopReason;
 import com.anthropic.models.messages.TextBlock;
 import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.Usage;
+import com.xmon.nanoagent.hook.HookDispatcher;
 import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.ApprovalPrompt;
 import com.xmon.nanoagent.permission.PermissionGate;
@@ -255,6 +256,18 @@ final class AgentLoopEndToEndTest {
     }
 
     /**
+     * 构造不注册任何 hook 的分发器
+     *
+     * <p>本类验证的是端到端场景而非 hook 机制，因此注册表留空。hook 机制本身由
+     * {@code HookDispatcherTest} 与 {@code CommandHookRunnerTest} 覆盖。
+     *
+     * @return 空的 hook 分发器
+     */
+    private HookDispatcher noHooks() {
+        return new HookDispatcher("test-session", workingDirectory, "default", Map.of());
+    }
+
+    /**
      * 构造使用真实规则表与指定审批器的循环
      *
      * @param model 假模型客户端
@@ -270,6 +283,7 @@ final class AgentLoopEndToEndTest {
                 model,
                 new ToolRegistry(BashTool.production(workingDirectory, System.getenv()), workspace),
                 new PermissionGate(PermissionRule.defaults(workspace), approvalPrompt),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(terminal),

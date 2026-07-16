@@ -14,6 +14,7 @@ import com.anthropic.models.messages.Tool;
 import com.anthropic.models.messages.ToolResultBlockParam;
 import com.anthropic.models.messages.ToolUseBlock;
 import com.anthropic.models.messages.Usage;
+import com.xmon.nanoagent.hook.HookDispatcher;
 import com.xmon.nanoagent.host.Workspace;
 import com.xmon.nanoagent.permission.PermissionGate;
 import com.xmon.nanoagent.tool.BashTool;
@@ -288,6 +289,7 @@ final class AgentLoopTest {
                 model,
                 toolRegistry(),
                 permitAll(),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 failingWriter,
@@ -318,12 +320,25 @@ final class AgentLoopTest {
                 failingModel,
                 toolRegistry(),
                 permitAll(),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(new StringWriter()),
                 new MarkdownRenderer(new PrintWriter(new java.io.StringWriter()), new DefaultMarkdownTheme()));
 
         assertEquals(modelFailure, assertThrows(IllegalStateException.class, () -> loop.respond("fail")));
+    }
+
+    /**
+     * 构造不注册任何 hook 的分发器
+     *
+     * <p>本类验证的是循环机制而非 hook 机制，因此注册表留空。hook 机制本身由
+     * {@code HookDispatcherTest} 与 {@code CommandHookRunnerTest} 覆盖。
+     *
+     * @return 空的 hook 分发器
+     */
+    private HookDispatcher noHooks() {
+        return new HookDispatcher("test-session", workingDirectory, "default", Map.of());
     }
 
     /**
@@ -345,6 +360,7 @@ final class AgentLoopTest {
                 model,
                 toolRegistry(),
                 permitAll(),
+                noHooks(),
                 "test-model",
                 workingDirectory,
                 new PrintWriter(terminal),

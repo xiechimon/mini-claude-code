@@ -38,7 +38,7 @@ public enum PermissionMode {
      *
      * @return 与 {@code PermissionMode} 逐字相同的字符串
      */
-    String contractValue() {
+    public String contractValue() {
         return contractValue;
     }
 }

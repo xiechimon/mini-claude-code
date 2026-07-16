@@ -34,6 +34,25 @@ _Avoid_: 权限决策、Permission Decision
 携带 `message`。
 _Avoid_: 权限返回值、Permission Outcome
 
+**Hook Event**（`HookEvent` / `HOOK_EVENTS`，`sdk.d.ts`）:
+Agent 生命周期上可挂载回调的时机。取值恰为 31 个，从 `PreToolUse` 到 `MessageDisplay`。
+_Avoid_: 生命周期钩子、Lifecycle Event、Hook Point
+
+**Hook Handler**（settings.json 的 `hooks` 数组元素）:
+一个 hook 的执行体，按 `type` 分五型：`command`、`http`、`mcp_tool`、`prompt`、`agent`。与 Tool Handler 是两个不同概念，
+不可混称。
+_Avoid_: Hook Callback（该词专指 Agent SDK 的进程内 `HookCallback`）、Hook Script
+
+**Matcher**（`HookCallbackMatcher.matcher`，`sdk.d.ts`）:
+决定一组 hook 是否在某次事件上触发的模式串。求值分三档，由模式串**含有哪些字符**判别，而非由用户声明：全匹配、
+精确串或精确串列表、非锚定正则。10 个事件不支持它，写了静默忽略。
+_Avoid_: 过滤器、Filter、Pattern
+
+**Hook Permission Decision**（`HookPermissionDecision`，`sdk.d.ts`）:
+`PreToolUse` hook 对一次工具调用的判定。取值恰为 `allow`、`deny`、`ask`、`defer`。`allow` 只跳过权限**提示**，
+不跳过拒绝规则——它是 Permission Behavior 的输入，不是它的替代。多个 hook 冲突时按 `deny > defer > ask > allow` 归并。
+_Avoid_: 与 Permission Behavior 混用；两者取值相似但层次不同，见 ADR-0007
+
 ## 内部术语
 
 本项目的实现概念，公开契约中没有对应物。
@@ -69,3 +88,8 @@ _Avoid_: Sandbox、Root Directory
 **Effective Environment**:
 由继承的进程变量与 `.env` 声明合并而成、供 agent 集成和所启动工具共同使用的配置视图；同名项以 `.env` 为准。
 _Avoid_: Process Environment、System Environment
+
+**Hook Dispatcher**:
+持有「Hook Event → Matcher 组」注册表，并在 Agent Loop 的四个位置触发、把多个 hook 的判定按事件归并成一个结果的
+协作者。匹配到的 hook 全部执行，不在首个判定处短路。
+_Avoid_: Hook Registry（注册表只是它的一半）、Hook Manager
