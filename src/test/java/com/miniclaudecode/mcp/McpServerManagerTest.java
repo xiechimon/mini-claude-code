@@ -1,0 +1,283 @@
+package com.miniclaudecode.mcp;
+
+import com.miniclaudecode.mcp.config.McpConfigLoader;
+import com.miniclaudecode.mcp.config.McpServerConfig;
+import com.miniclaudecode.tool.ToolRegistry;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * 通过 MockWebServer 模拟 Streamable HTTP MCP server 来端到端验证 McpServerManager 的启停流程
+ * 不测真实 stdio 子进程（已在 StdioTransportTest 单独覆盖）
+ */
+class McpServerManagerTest {
+
+    private MockWebServer webServer;
+    private ToolRegistry registry;
+    private McpServerManager manager;
+
+    @BeforeEach
+    void setUp(@TempDir Path tempDir) throws IOException {
+        webServer = new MockWebServer();
+        webServer.start();
+        registry = new ToolRegistry();
+        // 用空 config loader 占位，单独把 server 直接放进 manager（避开真实文件读取）
+        manager = new McpServerManager(registry, tempDir,
+                new McpConfigLoader(tempDir.resolve("user.json"), tempDir.resolve("project.json"), tempDir));
+    }
+
+    @AfterEach
+    void tearDown() throws IOException {
+        if (manager != null) manager.close();
+        if (webServer != null) webServer.shutdown();
+    }
+
+    @Test
+    void startAllStartsHttpServerAndRegistersTools() throws Exception {
+        enqueueInitialize();
+        enqueueToolsList(toolJson("echo", "Echo back text"));
+
+        loadServersFromMap(Map.of("demo", httpConfig(webServer)));
+        manager.startAll();
+
+        McpServer server = manager.servers().iterator().next();
+        assertEquals(McpServerStatus.READY, server.status(), "状态应为 READY，错误: " + server.errorMessage());
+        assertEquals(1, server.tools().size());
+        assertTrue(registry.hasTool("mcp__demo__echo"));
+    }
+
+    @Test
+    void resourcesCapabilityRegistersVirtualResourceTools() throws Exception {
+        enqueueInitialize("{\"resources\":{\"listChanged\":true},\"prompts\":{}}");
+        enqueueToolsList(toolJson("echo", "Echo back text"));
+        enqueueResourcesList();
+
+        loadServersFromMap(Map.of("demo", httpConfig(webServer)));
+        manager.startAll();
+
+        assertTrue(registry.hasTool("mcp__demo__echo"));
+        assertTrue(registry.hasTool("mcp__demo__list_resources"));
+        assertTrue(registry.hasTool("mcp__demo__read_resource"));
+        assertTrue(manager.resourceCandidates().stream().anyMatch(r -> r.uri().equals("file://README.md")));
+        assertTrue(manager.resourceIndexForPrompt().contains("@demo:file://README.md"));
+
+        enqueuePromptsList();
+        assertTrue(manager.prompts("demo").contains("Review (review)"));
+    }
+
+    @Test
+    void singleServerFailureDoesNotBlockOthers() throws Exception {
+        // 一个 OK 的 server + 一个引用未设置 ${VAR} 的 server
+        enqueueInitialize();
+        enqueueToolsList(toolJson("ok", "ok tool"));
+
+        Map<String, McpServerConfig> configs = new LinkedHashMap<>();
+        configs.put("good", httpConfig(webServer));
+        McpServerConfig bad = new McpServerConfig();
+        bad.setUrl("https://example.com/${UNSET_DEMO_VAR_FOR_TEST}");
+        configs.put("bad", bad);
+        loadServersFromMap(configs);
+
+        manager.startAll();
+
+        Map<String, McpServer> byName = new HashMap<>();
+        manager.servers().forEach(s -> byName.put(s.name(), s));
+        assertEquals(McpServerStatus.READY, byName.get("good").status(),
+                "good 应正常启动，不被 bad 阻塞");
+        assertEquals(McpServerStatus.ERROR, byName.get("bad").status(),
+                "bad 应标 ERROR");
+        assertNotNull(byName.get("bad").errorMessage());
+        assertTrue(registry.hasTool("mcp__good__ok"));
+    }
+
+    @Test
+    void boundedStartupWaitReturnsWhileSlowServerContinuesStarting() throws Exception {
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-03-26\"}}")
+                .setBodyDelay(3, TimeUnit.SECONDS));
+
+        loadServersFromMap(Map.of("slow", httpConfig(webServer)));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        long started = System.nanoTime();
+        manager.startAll(new PrintStream(out, true, StandardCharsets.UTF_8), Duration.ofMillis(100));
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        McpServer server = manager.server("slow");
+        assertTrue(elapsedMillis < 1500, "bounded startup should return before initialize timeout");
+        assertEquals(McpServerStatus.STARTING, server.status());
+        assertFalse(registry.hasTool("mcp__slow__echo"));
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("后台继续启动"));
+    }
+
+    @Test
+    void asyncStartupReturnsImmediatelyAndCompletesAfterToolsAreRegistered() throws Exception {
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setHeader("Mcp-Session-Id", "session-test")
+                .setBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-03-26\"}}")
+                .setBodyDelay(2, TimeUnit.SECONDS));
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody(""));
+        enqueueToolsList(toolJson("echo", "Echo"));
+        loadServersFromMap(Map.of("slow", httpConfig(webServer)));
+
+        long started = System.nanoTime();
+        var startup = manager.startAllAsync(new PrintStream(new ByteArrayOutputStream()));
+        long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+
+        assertTrue(elapsedMillis < 1000, "async startup should not hold the CLI main thread");
+        assertFalse(startup.isDone());
+
+        startup.get(5, TimeUnit.SECONDS);
+        assertEquals(McpServerStatus.READY, manager.server("slow").status());
+        assertTrue(registry.hasTool("mcp__slow__echo"));
+    }
+
+    @Test
+    void disableRemovesToolsFromRegistry() throws Exception {
+        enqueueInitialize();
+        enqueueToolsList(toolJson("echo", "Echo"));
+
+        loadServersFromMap(Map.of("demo", httpConfig(webServer)));
+        manager.startAll();
+        assertTrue(registry.hasTool("mcp__demo__echo"));
+
+        String result = manager.disable("demo");
+        assertTrue(result.contains("已禁用"));
+        assertFalse(registry.hasTool("mcp__demo__echo"),
+                "disable 后 ToolRegistry 应不再持有该工具");
+        McpServer server = manager.servers().iterator().next();
+        assertEquals(McpServerStatus.DISABLED, server.status());
+    }
+
+    @Test
+    void restartReregistersToolsAfterFailure() throws Exception {
+        webServer.enqueue(new MockResponse().setResponseCode(401));
+
+        loadServersFromMap(Map.of("demo", httpConfig(webServer)));
+        manager.startAll();
+
+        McpServer server = manager.servers().iterator().next();
+        assertEquals(McpServerStatus.ERROR, server.status());
+        assertFalse(registry.hasTool("mcp__demo__echo"));
+
+        enqueueInitialize();
+        enqueueToolsList(toolJson("echo", "Echo"));
+
+        String result = manager.restart("demo");
+        assertEquals(McpServerStatus.READY, server.status(), "重启后应 READY: " + result);
+        assertTrue(registry.hasTool("mcp__demo__echo"));
+    }
+
+    @Test
+    void restartWithArgsUpdatesServerConfig() {
+        McpServerConfig config = new McpServerConfig();
+        config.setCommand("definitely-missing-mini-claude-code-test-command");
+        config.setArgs(List.of("old"));
+        loadServersFromMap(Map.of("demo", config));
+
+        String result = manager.restartWithArgs("demo", List.of("new", "args"));
+
+        McpServer server = manager.server("demo");
+        assertEquals(List.of("new", "args"), server.config().getArgs());
+        assertTrue(result.contains("重启失败"));
+    }
+
+    @Test
+    void unknownServerOperationsReturnFriendlyError() {
+        loadServersFromMap(Map.of());
+        assertTrue(manager.disable("missing").contains("未找到"));
+        assertTrue(manager.enable("missing").contains("未找到"));
+        assertTrue(manager.restart("missing").contains("未找到"));
+        assertTrue(manager.logs("missing").contains("未找到"));
+    }
+
+
+    private void enqueueInitialize() {
+        enqueueInitialize(null);
+    }
+
+    private void enqueueInitialize(String capabilitiesJson) {
+        String capabilities = capabilitiesJson == null ? "" : ",\"capabilities\":" + capabilitiesJson;
+        // initialize 请求响应
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setHeader("Mcp-Session-Id", "session-test")
+                .setBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-03-26\"" + capabilities + "}}"));
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody(""));
+    }
+
+    private void enqueueToolsList(String toolJson) {
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[" + toolJson + "]}}"));
+    }
+
+    private void enqueueResourcesList() {
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("""
+                        {"jsonrpc":"2.0","id":3,"result":{"resources":[
+                          {"uri":"file://README.md","name":"README.md","description":"docs","mimeType":"text/markdown"}
+                        ]}}
+                        """));
+    }
+
+    private void enqueuePromptsList() {
+        webServer.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("""
+                        {"jsonrpc":"2.0","id":4,"result":{"prompts":[
+                          {"name":"review","title":"Review","description":"Review code"}
+                        ]}}
+                        """));
+    }
+
+    private static String toolJson(String name, String description) {
+        return "{\"name\":\"" + name + "\",\"description\":\"" + description + "\","
+                + "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}";
+    }
+
+    private static McpServerConfig httpConfig(MockWebServer webServer) {
+        McpServerConfig config = new McpServerConfig();
+        config.setUrl(webServer.url("/mcp").toString());
+        return config;
+    }
+
+    private void loadServersFromMap(Map<String, McpServerConfig> configs) {
+        try {
+            java.lang.reflect.Field f = McpServerManager.class.getDeclaredField("servers");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, McpServer> map = (Map<String, McpServer>) f.get(manager);
+            map.clear();
+            configs.forEach((name, cfg) -> map.put(name, new McpServer(name, cfg)));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
