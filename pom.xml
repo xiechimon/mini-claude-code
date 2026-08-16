@@ -5,9 +5,9 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.xmon</groupId>
+    <groupId>com.miniclaudecode</groupId>
     <artifactId>mini-claude-code</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>jar</packaging>
 
     <name>Mini Claude Code</name>
@@ -15,7 +15,7 @@
 
     <properties>
         <revision>1.0-SNAPSHOT</revision>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Dependency versions -->
@@ -82,23 +82,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Nano Agent 迁移期间保留旧实现依赖，切换默认入口后移除 -->
-        <dependency>
-            <groupId>com.anthropic</groupId>
-            <artifactId>anthropic-java</artifactId>
-            <version>2.53.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.cdimascio</groupId>
-            <artifactId>dotenv-java</artifactId>
-            <version>3.2.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.vladsch.flexmark</groupId>
-            <artifactId>flexmark-all</artifactId>
-            <version>0.64.8</version>
-        </dependency>
-
         <!-- JSON处理 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -247,7 +230,7 @@
                     <forceCreation>true</forceCreation>
                     <archive>
                         <manifest>
-                            <mainClass>com.xmon.nanoagent.Main</mainClass>
+                            <mainClass>com.miniclaudecode.cli.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -288,7 +271,7 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.xmon.nanoagent.Main</mainClass>
+                                    <mainClass>com.miniclaudecode.cli.Main</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
