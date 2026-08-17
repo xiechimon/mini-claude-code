@@ -1,25 +1,39 @@
-# 本地环境变量（含 API key，绝不入库；模板见 .env.example）
+# 环境变量与密钥
 .env
+.env.local
+.env.*.local
+MCC.local.md
+# 旧项目记忆本地覆盖仍保持忽略，读取兼容期内避免误提交
+PAI.local.md
 
-# Maven 构建产物
+# 构建产物
 target/
+dependency-reduced-pom.xml
+*.class
+*.jar
 
-# CodeGraph 索引产物
-.codegraph/
-
-# 本地 Agent 与 Claude Code 配置（不入库）；skills/ 例外，承载项目流程契约，随仓库走
-.agents/
-.claude/*
-!.claude/skills/
-
-# Playwright MCP 本地会话产物（截图、快照）
-.playwright-mcp/
-
-# Skill 版本锁文件（本地工具生成）
-skills-lock.json
+# 运行时数据（.mini-claude-code 下只跟踪 MCC.md）
+.mini-claude-code/*
+!.mini-claude-code/
+!.mini-claude-code/MCC.md
+logs/
+*.log
+/reports
+temp_articles.json
 
 # IDE
 .idea/
+*.iml
+.vscode/
 
-# macOS
+# 本地 AI 工具链（各自机器生成，不入库）
+.codegraph/
+.agents/
+.playwright-mcp/
+.claude/settings.local.json
+.claude/plans/
+.claude/skills/
+
+# 操作系统
 .DS_Store
+Thumbs.db
