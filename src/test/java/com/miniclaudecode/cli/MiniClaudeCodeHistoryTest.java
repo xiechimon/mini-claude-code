@@ -19,6 +19,18 @@ class MiniClaudeCodeHistoryTest {
     @TempDir
     Path tempDir;
 
+    private static LineReader newLineReader() throws Exception {
+        Terminal terminal = TerminalBuilder.builder()
+                .dumb(true)
+                .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
+                .build();
+
+        return LineReaderBuilder.builder()
+                .terminal(terminal)
+                .history(new MiniClaudeCodeHistory())
+                .build();
+    }
+
     @Test
     void filtersSecretsAndImagePayloads() {
         MiniClaudeCodeHistory history = new MiniClaudeCodeHistory();
@@ -73,17 +85,5 @@ class MiniClaudeCodeHistoryTest {
 
         assertEquals(dir.resolve("input.history").toAbsolutePath().normalize(),
                 Main.normalizeHistoryFile(dir));
-    }
-
-    private static LineReader newLineReader() throws Exception {
-        Terminal terminal = TerminalBuilder.builder()
-                .dumb(true)
-                .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                .build();
-
-        return LineReaderBuilder.builder()
-                .terminal(terminal)
-                .history(new MiniClaudeCodeHistory())
-                .build();
     }
 }

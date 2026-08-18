@@ -13,7 +13,9 @@ import com.miniclaudecode.util.AnsiStyle;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 显示 Lanterna TUI 的对话、工具结果和流式输出 */
+/**
+ * 显示 Lanterna TUI 的对话、工具结果和流式输出
+ */
 public class CenterPane extends Panel {
 
     private final LlmClient llmClient;
@@ -32,6 +34,26 @@ public class CenterPane extends Panel {
 
         addComponent(chatArea.setLayoutData(
                 LinearLayout.createLayoutData(Alignment.Fill, GrowPolicy.CanGrow)));
+    }
+
+    private static String replaceAllRegex(String text, String regex, java.util.function.Function<Matcher, String> replacer) {
+        Matcher matcher = Pattern.compile(regex).matcher(text);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            matcher.appendReplacement(result, replacer.apply(matcher));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static String truncateResult(String result, int maxLength) {
+        if (result == null) {
+            return "null";
+        }
+        if (result.length() <= maxLength) {
+            return result;
+        }
+        return result.substring(0, maxLength) + "\n... (截断，共 " + result.length() + " 字符)";
     }
 
     /**
@@ -115,16 +137,6 @@ public class CenterPane extends Panel {
         return text;
     }
 
-    private static String replaceAllRegex(String text, String regex, java.util.function.Function<Matcher, String> replacer) {
-        Matcher matcher = Pattern.compile(regex).matcher(text);
-        StringBuilder result = new StringBuilder();
-        while (matcher.find()) {
-            matcher.appendReplacement(result, replacer.apply(matcher));
-        }
-        matcher.appendTail(result);
-        return result.toString();
-    }
-
     private String highlightCodeBlocks(String text) {
         StringBuilder result = new StringBuilder();
         int i = 0;
@@ -161,16 +173,6 @@ public class CenterPane extends Panel {
         }
 
         return result.toString();
-    }
-
-    private static String truncateResult(String result, int maxLength) {
-        if (result == null) {
-            return "null";
-        }
-        if (result.length() <= maxLength) {
-            return result;
-        }
-        return result.substring(0, maxLength) + "\n... (截断，共 " + result.length() + " 字符)";
     }
 
     private void scrollToBottom() {

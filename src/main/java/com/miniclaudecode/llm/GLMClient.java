@@ -27,6 +27,14 @@ public class GLMClient extends AbstractOpenAiCompatibleClient {
         this.apiUrl = apiUrl != null && !apiUrl.isBlank() ? apiUrl : selectApiUrl(this.model);
     }
 
+    private static String selectApiUrl(String model) {
+        String normalized = model == null ? "" : model.trim().toLowerCase();
+        if (normalized.startsWith("glm-5v")) {
+            return MULTIMODAL_API_URL;
+        }
+        return CODING_API_URL;
+    }
+
     @Override
     protected String getApiUrl() {
         return apiUrl;
@@ -73,14 +81,6 @@ public class GLMClient extends AbstractOpenAiCompatibleClient {
             return part.imageBase64();
         }
         return super.toImageUrl(part);
-    }
-
-    private static String selectApiUrl(String model) {
-        String normalized = model == null ? "" : model.trim().toLowerCase();
-        if (normalized.startsWith("glm-5v")) {
-            return MULTIMODAL_API_URL;
-        }
-        return CODING_API_URL;
     }
 
     private boolean isGlm5v() {

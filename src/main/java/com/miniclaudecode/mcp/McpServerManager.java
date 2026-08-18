@@ -47,6 +47,31 @@ public class McpServerManager implements AutoCloseable {
         this.configLoader = configLoader;
     }
 
+    /**
+     * MCP 工具执行入口：把 LLM 给的 JSON 参数透传给 server 的 tools/call，并把异常转成 LLM 可读字符串
+     * 提取成独立方法是为了让 server 维度的错误信息（serverName/toolName）在堆栈和日志里清晰可见
+     */
+    private static ToolOutput invokeMcpToolOutput(McpClient client, McpToolDescriptor descriptor, String argumentsJson) {
+        try {
+            return client.callToolOutput(descriptor.name(), argumentsJson);
+        } catch (Exception e) {
+            return ToolOutput.text("MCP 工具调用失败 (" + descriptor.serverName() + "/" + descriptor.name() + "): "
+                    + e.getMessage());
+        }
+    }
+
+    private static long elapsedMillis(long startedAtNanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    }
+
+    private static String formatDuration(Duration duration) {
+        long seconds = duration.toSeconds();
+        if (seconds < 60) return seconds + "s";
+        long minutes = seconds / 60;
+        if (minutes < 60) return minutes + "m";
+        return (minutes / 60) + "h";
+    }
+
     public void loadConfiguredServers() throws IOException {
         Map<String, McpServerConfig> configs = configLoader.load();
         servers.clear();
@@ -490,19 +515,6 @@ public class McpServerManager implements AutoCloseable {
         return resources;
     }
 
-    /**
-     * MCP 工具执行入口：把 LLM 给的 JSON 参数透传给 server 的 tools/call，并把异常转成 LLM 可读字符串
-     * 提取成独立方法是为了让 server 维度的错误信息（serverName/toolName）在堆栈和日志里清晰可见
-     */
-    private static ToolOutput invokeMcpToolOutput(McpClient client, McpToolDescriptor descriptor, String argumentsJson) {
-        try {
-            return client.callToolOutput(descriptor.name(), argumentsJson);
-        } catch (Exception e) {
-            return ToolOutput.text("MCP 工具调用失败 (" + descriptor.serverName() + "/" + descriptor.name() + "): "
-                    + e.getMessage());
-        }
-    }
-
     private McpTransport createTransport(McpServerConfig config) throws IOException {
         if (config.isHttp()) {
             return new StreamableHttpTransport(config.getUrl(), config.getHeaders());
@@ -531,8 +543,12 @@ public class McpServerManager implements AutoCloseable {
         server.tools(List.of());
     }
 
-    private static long elapsedMillis(long startedAtNanos) {
-        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    @Override
+    public void close() {
+        for (McpServer server : servers.values()) {
+            unregisterTools(server);
+            server.close();
+        }
     }
 
     public record ResourceReadResult(String content, String mimeType) {
@@ -556,22 +572,6 @@ public class McpServerManager implements AutoCloseable {
                 text.append(System.lineSeparator());
             }
             return new ResourceReadResult(text.toString().trim(), firstMimeType);
-        }
-    }
-
-    private static String formatDuration(Duration duration) {
-        long seconds = duration.toSeconds();
-        if (seconds < 60) return seconds + "s";
-        long minutes = seconds / 60;
-        if (minutes < 60) return minutes + "m";
-        return (minutes / 60) + "h";
-    }
-
-    @Override
-    public void close() {
-        for (McpServer server : servers.values()) {
-            unregisterTools(server);
-            server.close();
         }
     }
 }

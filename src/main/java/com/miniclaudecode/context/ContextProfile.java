@@ -61,21 +61,6 @@ public record ContextProfile(
         );
     }
 
-    /**
-     * 触发压缩的绝对 token 阈值（占用 ≥ 此值即压缩）
-     */
-    public int compressionTriggerTokens() {
-        return autoCompactTriggerTokens(maxContextWindow);
-    }
-
-    public String summary() {
-        return "window: " + maxContextWindow
-                + " | 压缩阈值: " + (int) (compressionTriggerRatio * 100) + "% (" + compressionTriggerTokens() + " tokens)"
-                + " | 短期记忆预算: " + shortTermMemoryBudget
-                + " | MCP resource 索引: " + (mcpResourceIndexEnabled ? "on" : "off")
-                + " | prompt cache: " + promptCacheMode;
-    }
-
     private static int agentBudget(int window) {
         // Agent 单次 run 的 token 上限（input + output 累计），保 20% 余量给响应突发
         return Math.max(4_000, (int) Math.floor(window * 0.8));
@@ -100,5 +85,20 @@ public record ContextProfile(
         int buffer = Math.min(AUTOCOMPACT_BUFFER_TOKENS, Math.max(1_000, safeWindow / 8));
         int trigger = safeWindow - summaryReserve - buffer;
         return Math.max(1_000, Math.min(safeWindow - 1, trigger));
+    }
+
+    /**
+     * 触发压缩的绝对 token 阈值（占用 ≥ 此值即压缩）
+     */
+    public int compressionTriggerTokens() {
+        return autoCompactTriggerTokens(maxContextWindow);
+    }
+
+    public String summary() {
+        return "window: " + maxContextWindow
+                + " | 压缩阈值: " + (int) (compressionTriggerRatio * 100) + "% (" + compressionTriggerTokens() + " tokens)"
+                + " | 短期记忆预算: " + shortTermMemoryBudget
+                + " | MCP resource 索引: " + (mcpResourceIndexEnabled ? "on" : "off")
+                + " | prompt cache: " + promptCacheMode;
     }
 }

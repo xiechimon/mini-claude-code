@@ -20,18 +20,51 @@ public final class ClipboardImage {
 
     private static final Path DEFAULT_CACHE_DIR = Path.of(
             System.getProperty("user.home"), ".mini-claude-code", "cache");
+    // PNG 类型缺失时 AppleScript 返回非零状态，由 Java 侧进入 TIFF 兜底
+    private static final String MAC_CLIPBOARD_PNG_SCRIPT = """
+            on run argv
+                set outputPath to item 1 of argv
+                try
+                    set pngData to (the clipboard as «class PNGf»)
+                on error errMsg
+                    error "剪贴板里没有 PNG 数据"
+                end try
+                set fh to open for access (POSIX file outputPath as string) with write permission
+                try
+                    set eof of fh to 0
+                    write pngData to fh
+                    close access fh
+                on error errMsg
+                    try
+                        close access fh
+                    end try
+                    error errMsg
+                end try
+            end run
+            """;
+    private static final String MAC_CLIPBOARD_TIFF_SCRIPT = """
+            on run argv
+                set outputPath to item 1 of argv
+                try
+                    set tiffData to (the clipboard as «class TIFF»)
+                on error errMsg
+                    error "剪贴板里没有 TIFF 数据"
+                end try
+                set fh to open for access (POSIX file outputPath as string) with write permission
+                try
+                    set eof of fh to 0
+                    write tiffData to fh
+                    close access fh
+                on error errMsg
+                    try
+                        close access fh
+                    end try
+                    error errMsg
+                end try
+            end run
+            """;
 
     private ClipboardImage() {
-    }
-
-    public record GrabResult(boolean ok, Path path, String error) {
-        public static GrabResult ok(Path path) {
-            return new GrabResult(true, path, null);
-        }
-
-        public static GrabResult error(String error) {
-            return new GrabResult(false, null, error);
-        }
     }
 
     public static GrabResult grab() {
@@ -168,54 +201,6 @@ public final class ClipboardImage {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
     }
 
-    // PNG 类型缺失时 AppleScript 返回非零状态，由 Java 侧进入 TIFF 兜底
-    private static final String MAC_CLIPBOARD_PNG_SCRIPT = """
-            on run argv
-                set outputPath to item 1 of argv
-                try
-                    set pngData to (the clipboard as «class PNGf»)
-                on error errMsg
-                    error "剪贴板里没有 PNG 数据"
-                end try
-                set fh to open for access (POSIX file outputPath as string) with write permission
-                try
-                    set eof of fh to 0
-                    write pngData to fh
-                    close access fh
-                on error errMsg
-                    try
-                        close access fh
-                    end try
-                    error errMsg
-                end try
-            end run
-            """;
-
-    private static final String MAC_CLIPBOARD_TIFF_SCRIPT = """
-            on run argv
-                set outputPath to item 1 of argv
-                try
-                    set tiffData to (the clipboard as «class TIFF»)
-                on error errMsg
-                    error "剪贴板里没有 TIFF 数据"
-                end try
-                set fh to open for access (POSIX file outputPath as string) with write permission
-                try
-                    set eof of fh to 0
-                    write tiffData to fh
-                    close access fh
-                on error errMsg
-                    try
-                        close access fh
-                    end try
-                    error errMsg
-                end try
-            end run
-            """;
-
-    private record OsascriptOutcome(int exitCode, String stderr, boolean timedOut) {
-    }
-
     private static String humanBytes(long bytes) {
         if (bytes < 1024) {
             return bytes + "B";
@@ -241,5 +226,18 @@ public final class ClipboardImage {
             g.dispose();
         }
         return out;
+    }
+
+    public record GrabResult(boolean ok, Path path, String error) {
+        public static GrabResult ok(Path path) {
+            return new GrabResult(true, path, null);
+        }
+
+        public static GrabResult error(String error) {
+            return new GrabResult(false, null, error);
+        }
+    }
+
+    private record OsascriptOutcome(int exitCode, String stderr, boolean timedOut) {
     }
 }

@@ -38,12 +38,6 @@ public class McpClient implements AutoCloseable {
         this.rpc = new JsonRpcClient(transport);
     }
 
-    public void initialize() throws IOException {
-        JsonNode result = rpc.request("initialize", McpInitializeRequest.toJson(), initializeTimeoutSeconds());
-        serverCapabilities = result == null ? JsonNodeFactory.instance.objectNode() : result.path("capabilities");
-        rpc.sendNotification("notifications/initialized", JsonNodeFactory.instance.objectNode());
-    }
-
     static int initializeTimeoutSeconds() {
         String configured = System.getProperty(INITIALIZE_TIMEOUT_PROPERTY);
         if (configured == null || configured.isBlank()) {
@@ -58,6 +52,68 @@ public class McpClient implements AutoCloseable {
         } catch (NumberFormatException ignored) {
             return DEFAULT_INITIALIZE_TIMEOUT_SECONDS;
         }
+    }
+
+    public static String formatResources(List<McpResourceDescriptor> resources) {
+        if (resources == null || resources.isEmpty()) {
+            return "📭 该 MCP server 暂无 resources";
+        }
+        StringBuilder sb = new StringBuilder("📚 MCP resources（").append(resources.size()).append("）\n");
+        for (McpResourceDescriptor resource : resources) {
+            sb.append("- ").append(resource.uri());
+            String name = resource.displayName();
+            if (name != null && !name.isBlank() && !name.equals(resource.uri())) {
+                sb.append(" | ").append(name);
+            }
+            if (resource.mimeType() != null && !resource.mimeType().isBlank()) {
+                sb.append(" | ").append(resource.mimeType());
+            }
+            if (resource.description() != null && !resource.description().isBlank()) {
+                sb.append("\n  ").append(resource.description());
+            }
+            sb.append('\n');
+        }
+        return sb.toString().trim();
+    }
+
+    public static String formatResourceContents(List<McpResourceContent> contents) {
+        if (contents == null || contents.isEmpty()) {
+            return "📭 MCP resource 内容为空";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (McpResourceContent content : contents) {
+            String mimeType = content.mimeType() == null || content.mimeType().isBlank()
+                    ? "application/octet-stream"
+                    : content.mimeType();
+            sb.append("<resource uri=\"").append(escapeXml(content.uri()))
+                    .append("\" mimeType=\"").append(escapeXml(mimeType)).append("\">\n");
+            if (content.isText()) {
+                sb.append(content.text());
+            } else {
+                sb.append("[binary resource blob omitted, base64 length=")
+                        .append(content.blob() == null ? 0 : content.blob().length())
+                        .append(']');
+            }
+            sb.append("\n</resource>\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private static String escapeXml(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("\"", "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
+    public void initialize() throws IOException {
+        JsonNode result = rpc.request("initialize", McpInitializeRequest.toJson(), initializeTimeoutSeconds());
+        serverCapabilities = result == null ? JsonNodeFactory.instance.objectNode() : result.path("capabilities");
+        rpc.sendNotification("notifications/initialized", JsonNodeFactory.instance.objectNode());
     }
 
     public boolean supportsResources() {
@@ -190,62 +246,6 @@ public class McpClient implements AutoCloseable {
 
     public void onNotification(Consumer<JsonNode> listener) {
         rpc.onNotification(listener);
-    }
-
-    public static String formatResources(List<McpResourceDescriptor> resources) {
-        if (resources == null || resources.isEmpty()) {
-            return "📭 该 MCP server 暂无 resources";
-        }
-        StringBuilder sb = new StringBuilder("📚 MCP resources（").append(resources.size()).append("）\n");
-        for (McpResourceDescriptor resource : resources) {
-            sb.append("- ").append(resource.uri());
-            String name = resource.displayName();
-            if (name != null && !name.isBlank() && !name.equals(resource.uri())) {
-                sb.append(" | ").append(name);
-            }
-            if (resource.mimeType() != null && !resource.mimeType().isBlank()) {
-                sb.append(" | ").append(resource.mimeType());
-            }
-            if (resource.description() != null && !resource.description().isBlank()) {
-                sb.append("\n  ").append(resource.description());
-            }
-            sb.append('\n');
-        }
-        return sb.toString().trim();
-    }
-
-    public static String formatResourceContents(List<McpResourceContent> contents) {
-        if (contents == null || contents.isEmpty()) {
-            return "📭 MCP resource 内容为空";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (McpResourceContent content : contents) {
-            String mimeType = content.mimeType() == null || content.mimeType().isBlank()
-                    ? "application/octet-stream"
-                    : content.mimeType();
-            sb.append("<resource uri=\"").append(escapeXml(content.uri()))
-                    .append("\" mimeType=\"").append(escapeXml(mimeType)).append("\">\n");
-            if (content.isText()) {
-                sb.append(content.text());
-            } else {
-                sb.append("[binary resource blob omitted, base64 length=")
-                        .append(content.blob() == null ? 0 : content.blob().length())
-                        .append(']');
-            }
-            sb.append("\n</resource>\n");
-        }
-        return sb.toString().trim();
-    }
-
-    private static String escapeXml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("&", "&amp;")
-                .replace("\"", "&quot;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;");
     }
 
     public List<String> stderrLines() {

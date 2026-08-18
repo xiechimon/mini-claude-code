@@ -16,6 +16,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BottomStatusBarTest {
 
+    private static String visible(String line) {
+        return line;
+    }
+
+    private static void assertStyledWhenColorEnabled(org.jline.utils.AttributedString line, String plain, String segment) {
+        int index = plain.indexOf(segment);
+        assertTrue(index >= 0, "missing segment: " + segment + " in " + plain);
+        if (AnsiStyle.isEnabled()) {
+            assertNotEquals(AttributedStyle.DEFAULT, line.styleAt(index), segment + " should be styled");
+        } else {
+            assertEquals(AttributedStyle.DEFAULT, line.styleAt(index), segment + " should stay plain under NO_COLOR");
+        }
+    }
+
     @Test
     void formatStatusLineIncludesAllFields() {
         StatusInfo info = StatusInfo.tokens("glm-5.1", 200_000L, 1200L, 1000L, 234L, 100L, "¥0.0123",
@@ -207,20 +221,6 @@ class BottomStatusBarTest {
             assertFalse(finished.contains("[22;1H"), "transcript scrolling is not manually forced anymore: " + finished);
         } finally {
             bar.close();
-        }
-    }
-
-    private static String visible(String line) {
-        return line;
-    }
-
-    private static void assertStyledWhenColorEnabled(org.jline.utils.AttributedString line, String plain, String segment) {
-        int index = plain.indexOf(segment);
-        assertTrue(index >= 0, "missing segment: " + segment + " in " + plain);
-        if (AnsiStyle.isEnabled()) {
-            assertNotEquals(AttributedStyle.DEFAULT, line.styleAt(index), segment + " should be styled");
-        } else {
-            assertEquals(AttributedStyle.DEFAULT, line.styleAt(index), segment + " should stay plain under NO_COLOR");
         }
     }
 }

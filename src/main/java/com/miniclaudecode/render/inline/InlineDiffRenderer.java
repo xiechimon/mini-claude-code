@@ -35,6 +35,103 @@ public final class InlineDiffRenderer {
         this.out = out;
     }
 
+    /**
+     * 朴素 LCS-based diff
+     */
+    static List<DiffOp> computeDiff(String[] before, String[] after) {
+        int n = before.length;
+        int m = after.length;
+        int[][] dp = new int[n + 1][m + 1];
+        for (int i = n - 1; i >= 0; i--) {
+            for (int j = m - 1; j >= 0; j--) {
+                if (before[i].equals(after[j])) {
+                    dp[i][j] = dp[i + 1][j + 1] + 1;
+                } else {
+                    dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+                }
+            }
+        }
+        List<DiffOp> ops = new ArrayList<>();
+        int i = 0, j = 0;
+        while (i < n && j < m) {
+            if (before[i].equals(after[j])) {
+                ops.add(new DiffOp(OpType.EQUAL, before[i], i, j));
+                i++;
+                j++;
+            } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+                ops.add(new DiffOp(OpType.DELETE, before[i], i, -1));
+                i++;
+            } else {
+                ops.add(new DiffOp(OpType.ADD, after[j], -1, j));
+                j++;
+            }
+        }
+        while (i < n) {
+            ops.add(new DiffOp(OpType.DELETE, before[i], i, -1));
+            i++;
+        }
+        while (j < m) {
+            ops.add(new DiffOp(OpType.ADD, after[j], -1, j));
+            j++;
+        }
+        return ops;
+    }
+
+    /**
+     * 把连续的 EQUAL 段切成 hunks，每个 hunk 包含 CONTEXT_LINES 上下行
+     */
+    static List<Hunk> groupIntoHunks(List<DiffOp> ops, String[] before, String[] after) {
+        List<Hunk> hunks = new ArrayList<>();
+        int idx = 0;
+        while (idx < ops.size()) {
+            // 找到下一个非 EQUAL 操作
+            while (idx < ops.size() && ops.get(idx).type == OpType.EQUAL) {
+                idx++;
+            }
+            if (idx >= ops.size()) break;
+            int hunkStart = Math.max(0, idx - CONTEXT_LINES);
+            // 找到 hunk 结束：连续 EQUAL 数 ≥ 2*CONTEXT_LINES 时分块
+            int hunkEnd = idx;
+            int equalRun = 0;
+            while (hunkEnd < ops.size()) {
+                DiffOp op = ops.get(hunkEnd);
+                if (op.type == OpType.EQUAL) {
+                    equalRun++;
+                    if (equalRun >= 2 * CONTEXT_LINES) {
+                        break;
+                    }
+                } else {
+                    equalRun = 0;
+                }
+                hunkEnd++;
+            }
+            int hunkClose = Math.min(ops.size(), hunkEnd + CONTEXT_LINES - equalRun);
+            // 收集本 hunk 的 ops
+            List<DiffOp> hunkOps = new ArrayList<>(ops.subList(hunkStart, hunkClose));
+            int beforeStart = firstBeforeIndex(hunkOps);
+            int afterStart = firstAfterIndex(hunkOps);
+            int beforeCount = (int) hunkOps.stream().filter(o -> o.type != OpType.ADD).count();
+            int afterCount = (int) hunkOps.stream().filter(o -> o.type != OpType.DELETE).count();
+            hunks.add(new Hunk(beforeStart, beforeCount, afterStart, afterCount, hunkOps));
+            idx = hunkClose;
+        }
+        return hunks;
+    }
+
+    private static int firstBeforeIndex(List<DiffOp> ops) {
+        for (DiffOp op : ops) {
+            if (op.beforeIndex >= 0) return op.beforeIndex;
+        }
+        return 0;
+    }
+
+    private static int firstAfterIndex(List<DiffOp> ops) {
+        for (DiffOp op : ops) {
+            if (op.afterIndex >= 0) return op.afterIndex;
+        }
+        return 0;
+    }
+
     public void render(String filePath, String before, String after) {
         out.println();
         out.println(AnsiStyle.heading("📝 " + (filePath == null ? "(unnamed)" : filePath)));
@@ -97,107 +194,10 @@ public final class InlineDiffRenderer {
     record DiffOp(OpType type, String text, int beforeIndex, int afterIndex) {
     }
 
-    /**
-     * 朴素 LCS-based diff
-     */
-    static List<DiffOp> computeDiff(String[] before, String[] after) {
-        int n = before.length;
-        int m = after.length;
-        int[][] dp = new int[n + 1][m + 1];
-        for (int i = n - 1; i >= 0; i--) {
-            for (int j = m - 1; j >= 0; j--) {
-                if (before[i].equals(after[j])) {
-                    dp[i][j] = dp[i + 1][j + 1] + 1;
-                } else {
-                    dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
-                }
-            }
-        }
-        List<DiffOp> ops = new ArrayList<>();
-        int i = 0, j = 0;
-        while (i < n && j < m) {
-            if (before[i].equals(after[j])) {
-                ops.add(new DiffOp(OpType.EQUAL, before[i], i, j));
-                i++;
-                j++;
-            } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-                ops.add(new DiffOp(OpType.DELETE, before[i], i, -1));
-                i++;
-            } else {
-                ops.add(new DiffOp(OpType.ADD, after[j], -1, j));
-                j++;
-            }
-        }
-        while (i < n) {
-            ops.add(new DiffOp(OpType.DELETE, before[i], i, -1));
-            i++;
-        }
-        while (j < m) {
-            ops.add(new DiffOp(OpType.ADD, after[j], -1, j));
-            j++;
-        }
-        return ops;
-    }
-
     record Hunk(int beforeStart, int beforeCount, int afterStart, int afterCount, List<DiffOp> ops) {
         String header() {
             return "@@ -" + (beforeStart + 1) + "," + beforeCount
                     + " +" + (afterStart + 1) + "," + afterCount + " @@";
         }
-    }
-
-    /**
-     * 把连续的 EQUAL 段切成 hunks，每个 hunk 包含 CONTEXT_LINES 上下行
-     */
-    static List<Hunk> groupIntoHunks(List<DiffOp> ops, String[] before, String[] after) {
-        List<Hunk> hunks = new ArrayList<>();
-        int idx = 0;
-        while (idx < ops.size()) {
-            // 找到下一个非 EQUAL 操作
-            while (idx < ops.size() && ops.get(idx).type == OpType.EQUAL) {
-                idx++;
-            }
-            if (idx >= ops.size()) break;
-            int hunkStart = Math.max(0, idx - CONTEXT_LINES);
-            // 找到 hunk 结束：连续 EQUAL 数 ≥ 2*CONTEXT_LINES 时分块
-            int hunkEnd = idx;
-            int equalRun = 0;
-            while (hunkEnd < ops.size()) {
-                DiffOp op = ops.get(hunkEnd);
-                if (op.type == OpType.EQUAL) {
-                    equalRun++;
-                    if (equalRun >= 2 * CONTEXT_LINES) {
-                        break;
-                    }
-                } else {
-                    equalRun = 0;
-                }
-                hunkEnd++;
-            }
-            int hunkClose = Math.min(ops.size(), hunkEnd + CONTEXT_LINES - equalRun);
-            // 收集本 hunk 的 ops
-            List<DiffOp> hunkOps = new ArrayList<>(ops.subList(hunkStart, hunkClose));
-            int beforeStart = firstBeforeIndex(hunkOps);
-            int afterStart = firstAfterIndex(hunkOps);
-            int beforeCount = (int) hunkOps.stream().filter(o -> o.type != OpType.ADD).count();
-            int afterCount = (int) hunkOps.stream().filter(o -> o.type != OpType.DELETE).count();
-            hunks.add(new Hunk(beforeStart, beforeCount, afterStart, afterCount, hunkOps));
-            idx = hunkClose;
-        }
-        return hunks;
-    }
-
-    private static int firstBeforeIndex(List<DiffOp> ops) {
-        for (DiffOp op : ops) {
-            if (op.beforeIndex >= 0) return op.beforeIndex;
-        }
-        return 0;
-    }
-
-    private static int firstAfterIndex(List<DiffOp> ops) {
-        for (DiffOp op : ops) {
-            if (op.afterIndex >= 0) return op.afterIndex;
-        }
-        return 0;
     }
 }

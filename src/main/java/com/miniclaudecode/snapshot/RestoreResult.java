@@ -17,6 +17,10 @@ public record RestoreResult(
         return new RestoreResult(false, null, message, List.of(), List.of());
     }
 
+    private static String shortId(String commitId) {
+        return commitId == null || commitId.length() <= 10 ? commitId : commitId.substring(0, 10);
+    }
+
     public String formatForCli() {
         if (!success) {
             return "❌ " + message;
@@ -26,9 +30,5 @@ public record RestoreResult(
                    写回文件: %d
                    删除文件: %d
                 """.formatted(message, restoredFiles.size(), removedFiles.size()).trim();
-    }
-
-    private static String shortId(String commitId) {
-        return commitId == null || commitId.length() <= 10 ? commitId : commitId.substring(0, 10);
     }
 }

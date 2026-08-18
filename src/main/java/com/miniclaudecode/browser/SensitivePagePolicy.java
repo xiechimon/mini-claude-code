@@ -40,23 +40,6 @@ public class SensitivePagePolicy {
         this.rules = compile(loadPatterns(userRulesFile));
     }
 
-    public MatchResult match(String url) {
-        if (url == null || url.isBlank()) {
-            return MatchResult.notMatched();
-        }
-        String normalized = url.toLowerCase(Locale.ROOT);
-        for (Rule rule : rules) {
-            if (rule.regex().matcher(normalized).matches()) {
-                return MatchResult.matched(rule.pattern());
-            }
-        }
-        return MatchResult.notMatched();
-    }
-
-    public boolean isSensitive(String url) {
-        return match(url).matched();
-    }
-
     private static List<String> loadPatterns(Path userRulesFile) {
         List<String> patterns = new ArrayList<>(DEFAULT_PATTERNS);
         if (userRulesFile == null || !Files.exists(userRulesFile)) {
@@ -96,6 +79,23 @@ public class SensitivePagePolicy {
         }
         regex.append('$');
         return regex.toString();
+    }
+
+    public MatchResult match(String url) {
+        if (url == null || url.isBlank()) {
+            return MatchResult.notMatched();
+        }
+        String normalized = url.toLowerCase(Locale.ROOT);
+        for (Rule rule : rules) {
+            if (rule.regex().matcher(normalized).matches()) {
+                return MatchResult.matched(rule.pattern());
+            }
+        }
+        return MatchResult.notMatched();
+    }
+
+    public boolean isSensitive(String url) {
+        return match(url).matched();
     }
 
     private record Rule(String pattern, Pattern regex) {

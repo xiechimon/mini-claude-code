@@ -10,7 +10,9 @@ import com.miniclaudecode.llm.LlmClient;
 
 import java.util.function.Consumer;
 
-/** Lanterna TUI 的底部输入栏，Enter 提交，Esc 清空 */
+/**
+ * Lanterna TUI 的底部输入栏，Enter 提交，Esc 清空
+ */
 public class InputBar extends Panel {
 
     private final LlmClient llmClient;

@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class WebFetcher {
 
-    private static final Logger log = LoggerFactory.getLogger(WebFetcher.class);
     public static final int DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+    private static final Logger log = LoggerFactory.getLogger(WebFetcher.class);
     private static final long DEFAULT_TIMEOUT_SECONDS = 30L;
 
     private final OkHttpClient httpClient;

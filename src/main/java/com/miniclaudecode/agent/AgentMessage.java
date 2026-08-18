@@ -17,15 +17,6 @@ public record AgentMessage(
         String content,
         Type type
 ) {
-    public enum Type {
-        TASK,
-        RESULT,
-        FEEDBACK,
-        APPROVAL,
-        REJECTION,
-        ERROR
-    }
-
     public static AgentMessage task(String fromAgent, String content) {
         return new AgentMessage(fromAgent, null, content, Type.TASK);
     }
@@ -48,5 +39,14 @@ public record AgentMessage(
 
     public static AgentMessage error(String fromAgent, AgentRole role, String content) {
         return new AgentMessage(fromAgent, role, content, Type.ERROR);
+    }
+
+    public enum Type {
+        TASK,
+        RESULT,
+        FEEDBACK,
+        APPROVAL,
+        REJECTION,
+        ERROR
     }
 }

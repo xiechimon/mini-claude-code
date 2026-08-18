@@ -12,6 +12,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SkillRegistryTest {
 
+    private static void writeSkill(Path root, String name, String desc, String version) throws IOException {
+        Path skillDir = root.resolve(name);
+        Files.createDirectories(skillDir);
+        String content = "---\nname: " + name
+                + "\ndescription: " + desc
+                + "\nversion: \"" + version + "\"\n---\nbody for " + name + "\n";
+        Files.writeString(skillDir.resolve("SKILL.md"), content);
+    }
+
     @Test
     void loadsSkillsFromAllThreeLayers(@TempDir Path tempDir) throws IOException {
         Path builtin = tempDir.resolve("builtin");
@@ -101,14 +110,5 @@ class SkillRegistryTest {
         registry.reload();
 
         assertEquals(2, registry.allSkills().size());
-    }
-
-    private static void writeSkill(Path root, String name, String desc, String version) throws IOException {
-        Path skillDir = root.resolve(name);
-        Files.createDirectories(skillDir);
-        String content = "---\nname: " + name
-                + "\ndescription: " + desc
-                + "\nversion: \"" + version + "\"\n---\nbody for " + name + "\n";
-        Files.writeString(skillDir.resolve("SKILL.md"), content);
     }
 }

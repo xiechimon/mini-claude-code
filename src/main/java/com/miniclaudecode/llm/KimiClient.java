@@ -22,6 +22,15 @@ public class KimiClient extends AbstractOpenAiCompatibleClient {
         this.apiUrl = toChatCompletionsUrl(baseUrl);
     }
 
+    private static String toChatCompletionsUrl(String baseUrl) {
+        String normalized = baseUrl != null && !baseUrl.isBlank() ? baseUrl.trim() : DEFAULT_BASE_URL;
+        String withoutTrailingSlash = normalized.replaceAll("/+$", "");
+        if (withoutTrailingSlash.endsWith("/chat/completions")) {
+            return withoutTrailingSlash;
+        }
+        return withoutTrailingSlash + "/chat/completions";
+    }
+
     @Override
     protected String getApiUrl() {
         return apiUrl;
@@ -65,14 +74,5 @@ public class KimiClient extends AbstractOpenAiCompatibleClient {
     @Override
     public String promptCacheMode() {
         return "moonshot-context-cache";
-    }
-
-    private static String toChatCompletionsUrl(String baseUrl) {
-        String normalized = baseUrl != null && !baseUrl.isBlank() ? baseUrl.trim() : DEFAULT_BASE_URL;
-        String withoutTrailingSlash = normalized.replaceAll("/+$", "");
-        if (withoutTrailingSlash.endsWith("/chat/completions")) {
-            return withoutTrailingSlash;
-        }
-        return withoutTrailingSlash + "/chat/completions";
     }
 }

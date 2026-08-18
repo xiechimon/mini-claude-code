@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
  * 无效引用会转换为可读错误文本，不让单张图片中断整条消息
  */
 public class ImageReferenceParser {
+    public static final long MAX_IMAGE_BYTES = ImageProcessor.API_IMAGE_MAX_BASE64_SIZE;
     // image 命中时 group(1) 是路径，clipboard 命中时为 null
     // 裸路径排除 CJK 与全角标点，复杂路径可用 @image:<...> 显式包裹
     // @clipboard 使用 Unicode 边界，避免误匹配 @clipboardfoo
@@ -25,7 +26,6 @@ public class ImageReferenceParser {
             "@image:(<[^>]+>|[^\\s<>\\u2010-\\u206F\\u3000-\\u303F\\uFF00-\\uFFEF]+)"
                     + "|@clipboard(?![\\p{L}\\p{N}_])");
     private static final String CLIPBOARD_TOKEN = "@clipboard";
-    public static final long MAX_IMAGE_BYTES = ImageProcessor.API_IMAGE_MAX_BASE64_SIZE;
 
     private ImageReferenceParser() {
     }
@@ -200,16 +200,16 @@ public class ImageReferenceParser {
     }
 
     private record ImagePayload(boolean ok, ImageProcessor.ProcessedImage image, String error) {
-        Path path() {
-            return image == null ? null : image.sourcePath();
-        }
-
         static ImagePayload ok(ImageProcessor.ProcessedImage image) {
             return new ImagePayload(true, image, null);
         }
 
         static ImagePayload error(String error) {
             return new ImagePayload(false, null, error);
+        }
+
+        Path path() {
+            return image == null ? null : image.sourcePath();
         }
     }
 }

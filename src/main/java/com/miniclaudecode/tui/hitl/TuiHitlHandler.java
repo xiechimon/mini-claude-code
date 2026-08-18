@@ -17,13 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class TuiHitlHandler implements HitlHandler {
 
-    private volatile boolean enabled = true;
-
     // 本次会话中已批准"全部放行"的集合
     private final Set<String> approvedAllByTool = ConcurrentHashMap.newKeySet();
     private final Set<String> approvedAllByServer = ConcurrentHashMap.newKeySet();
-
     private final WindowBasedTextGUI gui;
+    private volatile boolean enabled = true;
 
     public TuiHitlHandler(WindowBasedTextGUI gui) {
         this.gui = gui;

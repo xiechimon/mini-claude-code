@@ -48,6 +48,112 @@ public record ApprovalRequest(
     }
 
     /**
+     * 计算字符串的终端显示宽度（CJK / 全角 / 常见 emoji 占 2 列，其他占 1 列）
+     */
+    static int displayWidth(String s) {
+        if (s == null) return 0;
+        int w = 0;
+        int i = 0;
+        while (i < s.length()) {
+            int cp = s.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp < 0x20 || cp == 0x7F) {
+                continue;  // 控制字符不占列
+            }
+            if (isWideCodePoint(cp)) {
+                w += 2;
+            } else {
+                w += 1;
+            }
+        }
+        return w;
+    }
+
+    private static boolean isWideCodePoint(int cp) {
+        // 覆盖主流 CJK、韩文、全角、常见 emoji / 符号范围
+        return (cp >= 0x1100 && cp <= 0x115F)      // Hangul Jamo
+                || (cp >= 0x2E80 && cp <= 0x9FFF)  // CJK Radicals/统一
+                || (cp >= 0xA000 && cp <= 0xA4CF)  // Yi syllables
+                || (cp >= 0xAC00 && cp <= 0xD7A3)  // Hangul syllables
+                || (cp >= 0xF900 && cp <= 0xFAFF)  // CJK 兼容
+                || (cp >= 0xFE30 && cp <= 0xFE4F)  // CJK 兼容符号
+                || (cp >= 0xFF00 && cp <= 0xFF60)  // 全角
+                || (cp >= 0xFFE0 && cp <= 0xFFE6)
+                || (cp >= 0x2600 && cp <= 0x27BF)  // 杂项符号 + dingbats（含部分 emoji）
+                || (cp >= 0x1F300 && cp <= 0x1FAFF); // Emoji 主体区间
+    }
+
+    /**
+     * 按显示宽度 pad 右侧空格到目标列宽；已超出则直接返回
+     */
+    static String padRightByDisplayWidth(String s, int targetCols) {
+        int w = displayWidth(s);
+        if (w >= targetCols) {
+            return s;
+        }
+        return s + " ".repeat(targetCols - w);
+    }
+
+    /**
+     * 按显示宽度截断，如超出目标列宽则末尾加 "..."
+     */
+    static String truncateByDisplayWidth(String s, int targetCols) {
+        if (s == null) return "";
+        if (displayWidth(s) <= targetCols) {
+            return s;
+        }
+        StringBuilder sb = new StringBuilder();
+        int used = 0;
+        int reserve = 3;  // "..." 占 3 列
+        int i = 0;
+        while (i < s.length()) {
+            int cp = s.codePointAt(i);
+            int cpWidth = isWideCodePoint(cp) ? 2 : 1;
+            if (used + cpWidth > targetCols - reserve) {
+                break;
+            }
+            sb.appendCodePoint(cp);
+            used += cpWidth;
+            i += Character.charCount(cp);
+        }
+        sb.append("...");
+        return sb.toString();
+    }
+
+    /**
+     * 按显示宽度将一段文本拆成多行，每行不超过 lineWidth 显示列
+     */
+    static List<String> wrapByDisplayWidth(String text, int lineWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isBlank()) {
+            lines.add("");
+            return lines;
+        }
+        StringBuilder current = new StringBuilder();
+        int used = 0;
+        int i = 0;
+        while (i < text.length()) {
+            int cp = text.codePointAt(i);
+            int cpWidth = isWideCodePoint(cp) ? 2 : 1;
+            if (used + cpWidth > lineWidth) {
+                lines.add(current.toString());
+                current.setLength(0);
+                used = 0;
+            }
+            current.appendCodePoint(cp);
+            used += cpWidth;
+            i += Character.charCount(cp);
+        }
+        if (current.length() > 0) {
+            lines.add(current.toString());
+        }
+        if (lines.isEmpty()) {
+            lines.add("");
+        }
+        return lines;
+    }
+
+    /**
      * 按终端显示列宽排版，避免 CJK 和 emoji 破坏右边框对齐
      */
     public String toDisplayText() {
@@ -154,111 +260,5 @@ public record ApprovalRequest(
             // 非法 JSON，退回到原样展示
         }
         return wrapByDisplayWidth(args.trim(), ARG_LINE_WIDTH);
-    }
-
-    /**
-     * 计算字符串的终端显示宽度（CJK / 全角 / 常见 emoji 占 2 列，其他占 1 列）
-     */
-    static int displayWidth(String s) {
-        if (s == null) return 0;
-        int w = 0;
-        int i = 0;
-        while (i < s.length()) {
-            int cp = s.codePointAt(i);
-            i += Character.charCount(cp);
-            if (cp < 0x20 || cp == 0x7F) {
-                continue;  // 控制字符不占列
-            }
-            if (isWideCodePoint(cp)) {
-                w += 2;
-            } else {
-                w += 1;
-            }
-        }
-        return w;
-    }
-
-    private static boolean isWideCodePoint(int cp) {
-        // 覆盖主流 CJK、韩文、全角、常见 emoji / 符号范围
-        return (cp >= 0x1100 && cp <= 0x115F)      // Hangul Jamo
-                || (cp >= 0x2E80 && cp <= 0x9FFF)  // CJK Radicals/统一
-                || (cp >= 0xA000 && cp <= 0xA4CF)  // Yi syllables
-                || (cp >= 0xAC00 && cp <= 0xD7A3)  // Hangul syllables
-                || (cp >= 0xF900 && cp <= 0xFAFF)  // CJK 兼容
-                || (cp >= 0xFE30 && cp <= 0xFE4F)  // CJK 兼容符号
-                || (cp >= 0xFF00 && cp <= 0xFF60)  // 全角
-                || (cp >= 0xFFE0 && cp <= 0xFFE6)
-                || (cp >= 0x2600 && cp <= 0x27BF)  // 杂项符号 + dingbats（含部分 emoji）
-                || (cp >= 0x1F300 && cp <= 0x1FAFF); // Emoji 主体区间
-    }
-
-    /**
-     * 按显示宽度 pad 右侧空格到目标列宽；已超出则直接返回
-     */
-    static String padRightByDisplayWidth(String s, int targetCols) {
-        int w = displayWidth(s);
-        if (w >= targetCols) {
-            return s;
-        }
-        return s + " ".repeat(targetCols - w);
-    }
-
-    /**
-     * 按显示宽度截断，如超出目标列宽则末尾加 "..."
-     */
-    static String truncateByDisplayWidth(String s, int targetCols) {
-        if (s == null) return "";
-        if (displayWidth(s) <= targetCols) {
-            return s;
-        }
-        StringBuilder sb = new StringBuilder();
-        int used = 0;
-        int reserve = 3;  // "..." 占 3 列
-        int i = 0;
-        while (i < s.length()) {
-            int cp = s.codePointAt(i);
-            int cpWidth = isWideCodePoint(cp) ? 2 : 1;
-            if (used + cpWidth > targetCols - reserve) {
-                break;
-            }
-            sb.appendCodePoint(cp);
-            used += cpWidth;
-            i += Character.charCount(cp);
-        }
-        sb.append("...");
-        return sb.toString();
-    }
-
-    /**
-     * 按显示宽度将一段文本拆成多行，每行不超过 lineWidth 显示列
-     */
-    static List<String> wrapByDisplayWidth(String text, int lineWidth) {
-        List<String> lines = new ArrayList<>();
-        if (text == null || text.isBlank()) {
-            lines.add("");
-            return lines;
-        }
-        StringBuilder current = new StringBuilder();
-        int used = 0;
-        int i = 0;
-        while (i < text.length()) {
-            int cp = text.codePointAt(i);
-            int cpWidth = isWideCodePoint(cp) ? 2 : 1;
-            if (used + cpWidth > lineWidth) {
-                lines.add(current.toString());
-                current.setLength(0);
-                used = 0;
-            }
-            current.appendCodePoint(cp);
-            used += cpWidth;
-            i += Character.charCount(cp);
-        }
-        if (current.length() > 0) {
-            lines.add(current.toString());
-        }
-        if (lines.isEmpty()) {
-            lines.add("");
-        }
-        return lines;
     }
 }

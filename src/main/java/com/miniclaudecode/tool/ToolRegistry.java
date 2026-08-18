@@ -66,14 +66,14 @@ public class ToolRegistry {
     private static final int MAX_WRITE_FILE_BYTES = 5 * 1024 * 1024;
     // 需要审计的内置工具（与 ApprovalPolicy 的 DANGEROUS_TOOLS 保持一致）；MCP 工具按前缀动态纳入审计
     private static final Set<String> AUDIT_TOOLS = Set.of("write_file", "execute_command", "create_project", "revert_turn");
+    private static final int DEFAULT_FETCH_MAX_CHARS = 8_000;
     private final Map<String, Tool> tools = new ConcurrentHashMap<>();
     private final Map<String, McpRegisteredTool> mcpTools = new ConcurrentHashMap<>();
     private final long commandTimeoutSeconds;
     private final long toolBatchTimeoutSeconds;
-    private static final int DEFAULT_FETCH_MAX_CHARS = 8_000;
+    private final AuditLog auditLog = new AuditLog();
     private String projectPath = System.getProperty("user.dir");
     private PathGuard pathGuard = new PathGuard(projectPath);
-    private final AuditLog auditLog = new AuditLog();
     private SearchProvider searchProvider;
     private WebFetcher webFetcher;
     private HtmlExtractor htmlExtractor;
@@ -114,7 +114,65 @@ public class ToolRegistry {
         registerSnapshotTools();
     }
 
-    /** 切换 workspace 根目录，并同步重建路径围栏、LSP 与默认快照服务 */
+    private static int parseInt(String value, int fallback) {
+        if (value == null || value.isBlank()) return fallback;
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(value, max));
+    }
+
+    private static boolean parseBoolean(String value, boolean fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return "true".equalsIgnoreCase(value.trim()) || "1".equals(value.trim())
+                || "yes".equalsIgnoreCase(value.trim());
+    }
+
+    private static String normalizeGlob(String pattern) {
+        String normalized = pattern == null ? "**/*" : pattern.replace('\\', '/').trim();
+        if (normalized.isEmpty()) {
+            return "**/*";
+        }
+        if (!normalized.contains("/") && !normalized.startsWith("**")) {
+            return "**/" + normalized;
+        }
+        return normalized;
+    }
+
+    private static String normalizeFileNameGlob(String pattern) {
+        String normalized = pattern == null ? "*" : pattern.replace('\\', '/').trim();
+        if (normalized.isEmpty()) {
+            return "*";
+        }
+        int slash = normalized.lastIndexOf('/');
+        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
+    }
+
+    private static boolean shouldAudit(String name) {
+        return AUDIT_TOOLS.contains(name) || (name != null && name.startsWith("mcp__"));
+    }
+
+    private static String mcpDescription(McpToolDescriptor descriptor) {
+        String base = descriptor.description() == null || descriptor.description().isBlank()
+                ? "MCP server 提供的外部工具"
+                : descriptor.description();
+        return base + " (MCP server: " + descriptor.serverName() + ", tool: " + descriptor.name() + ")";
+    }
+
+    public String getProjectPath() {
+        return projectPath;
+    }
+
+    /**
+     * 切换 workspace 根目录，并同步重建路径围栏、LSP 与默认快照服务
+     */
     public void setProjectPath(String projectPath) {
         this.projectPath = projectPath;
         this.pathGuard = new PathGuard(projectPath);
@@ -125,8 +183,8 @@ public class ToolRegistry {
         }
     }
 
-    public String getProjectPath() {
-        return projectPath;
+    public ContextProfile getContextProfile() {
+        return contextProfile;
     }
 
     public void setContextProfile(ContextProfile contextProfile) {
@@ -135,21 +193,17 @@ public class ToolRegistry {
         }
     }
 
-    public ContextProfile getContextProfile() {
-        return contextProfile;
-    }
-
     public void setCurrentModel(String provider, String model) {
         this.currentProvider = provider == null ? "" : provider.trim().toLowerCase(Locale.ROOT);
         this.currentModel = model == null ? "" : model.trim().toLowerCase(Locale.ROOT);
     }
 
-    public void setBrowserGuard(BrowserGuard browserGuard) {
-        this.browserGuard = browserGuard;
-    }
-
     protected BrowserGuard getBrowserGuard() {
         return browserGuard;
+    }
+
+    public void setBrowserGuard(BrowserGuard browserGuard) {
+        this.browserGuard = browserGuard;
     }
 
     public void setBrowserConnector(BrowserConnector browserConnector) {
@@ -164,20 +218,20 @@ public class ToolRegistry {
         this.memorySaver = memorySaver;
     }
 
-    public void setSkillRegistry(SkillRegistry skillRegistry) {
-        this.skillRegistry = skillRegistry;
-    }
-
     public SkillRegistry getSkillRegistry() {
         return skillRegistry;
     }
 
-    public void setSkillContextBuffer(SkillContextBuffer skillContextBuffer) {
-        this.skillContextBuffer = skillContextBuffer;
+    public void setSkillRegistry(SkillRegistry skillRegistry) {
+        this.skillRegistry = skillRegistry;
     }
 
     public SkillContextBuffer getSkillContextBuffer() {
         return skillContextBuffer;
+    }
+
+    public void setSkillContextBuffer(SkillContextBuffer skillContextBuffer) {
+        this.skillContextBuffer = skillContextBuffer;
     }
 
     /**
@@ -710,77 +764,6 @@ public class ToolRegistry {
         ));
     }
 
-    private static int parseInt(String value, int fallback) {
-        if (value == null || value.isBlank()) return fallback;
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
-    }
-
-    private static int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(value, max));
-    }
-
-    private static boolean parseBoolean(String value, boolean fallback) {
-        if (value == null || value.isBlank()) {
-            return fallback;
-        }
-        return "true".equalsIgnoreCase(value.trim()) || "1".equals(value.trim())
-                || "yes".equalsIgnoreCase(value.trim());
-    }
-
-    private static String normalizeGlob(String pattern) {
-        String normalized = pattern == null ? "**/*" : pattern.replace('\\', '/').trim();
-        if (normalized.isEmpty()) {
-            return "**/*";
-        }
-        if (!normalized.contains("/") && !normalized.startsWith("**")) {
-            return "**/" + normalized;
-        }
-        return normalized;
-    }
-
-    private static String normalizeFileNameGlob(String pattern) {
-        String normalized = pattern == null ? "*" : pattern.replace('\\', '/').trim();
-        if (normalized.isEmpty()) {
-            return "*";
-        }
-        int slash = normalized.lastIndexOf('/');
-        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
-    }
-
-    private static final class SearchFileVisitor extends SimpleFileVisitor<Path> {
-        private final Path projectRoot;
-        private final java.util.function.Consumer<Path> fileConsumer;
-
-        private SearchFileVisitor(Path projectRoot, java.util.function.Consumer<Path> fileConsumer) {
-            this.projectRoot = projectRoot;
-            this.fileConsumer = fileConsumer;
-        }
-
-        @Override
-        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-            String name = dir.getFileName() == null ? "" : dir.getFileName().toString();
-            if (!dir.equals(projectRoot) && SEARCH_EXCLUDED_DIRS.contains(name)) {
-                return FileVisitResult.SKIP_SUBTREE;
-            }
-            return FileVisitResult.CONTINUE;
-        }
-
-        @Override
-        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-            fileConsumer.accept(file);
-            return FileVisitResult.CONTINUE;
-        }
-
-        @Override
-        public FileVisitResult visitFileFailed(Path file, IOException exc) {
-            return FileVisitResult.CONTINUE;
-        }
-    }
-
     private synchronized SearchProvider searchProvider() {
         if (searchProvider == null) {
             searchProvider = SearchProviderFactory.create();
@@ -1224,17 +1207,6 @@ public class ToolRegistry {
         return tools.containsKey(name);
     }
 
-    private static boolean shouldAudit(String name) {
-        return AUDIT_TOOLS.contains(name) || (name != null && name.startsWith("mcp__"));
-    }
-
-    private static String mcpDescription(McpToolDescriptor descriptor) {
-        String base = descriptor.description() == null || descriptor.description().isBlank()
-                ? "MCP server 提供的外部工具"
-                : descriptor.description();
-        return base + " (MCP server: " + descriptor.serverName() + ", tool: " + descriptor.name() + ")";
-    }
-
     private String executeCommand(String command) {
         String normalized = command == null ? "" : command.trim();
         if (normalized.isEmpty()) {
@@ -1321,6 +1293,40 @@ public class ToolRegistry {
         }
     }
 
+    public interface ToolExecutor {
+        String execute(Map<String, String> args);
+    }
+
+    private static final class SearchFileVisitor extends SimpleFileVisitor<Path> {
+        private final Path projectRoot;
+        private final java.util.function.Consumer<Path> fileConsumer;
+
+        private SearchFileVisitor(Path projectRoot, java.util.function.Consumer<Path> fileConsumer) {
+            this.projectRoot = projectRoot;
+            this.fileConsumer = fileConsumer;
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            String name = dir.getFileName() == null ? "" : dir.getFileName().toString();
+            if (!dir.equals(projectRoot) && SEARCH_EXCLUDED_DIRS.contains(name)) {
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+            fileConsumer.accept(file);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException exc) {
+            return FileVisitResult.CONTINUE;
+        }
+    }
+
     private record Param(String name, String type, String description, boolean required) {
     }
 
@@ -1370,9 +1376,5 @@ public class ToolRegistry {
         public boolean hasImageParts() {
             return imageParts != null && !imageParts.isEmpty();
         }
-    }
-
-    public interface ToolExecutor {
-        String execute(Map<String, String> args);
     }
 }

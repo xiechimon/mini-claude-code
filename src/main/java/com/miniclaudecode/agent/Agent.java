@@ -44,18 +44,18 @@ import java.util.function.Supplier;
  */
 public class Agent {
     private static final Logger log = LoggerFactory.getLogger(Agent.class);
-    private LlmClient llmClient;
     private final ToolRegistry toolRegistry;
     private final List<LlmClient.Message> conversationHistory;
     private final MemoryManager memoryManager;
     private final ConversationHistoryCompactor historyCompactor;
+    private final PromptAssembler promptAssembler = PromptAssembler.createDefault();
+    private LlmClient llmClient;
     private Supplier<String> externalContextSupplier = () -> "";
     private SkillRegistry skillRegistry;
     private SkillContextBuffer skillContextBuffer;
     private Renderer renderer;
     private Supplier<Boolean> hitlEnabledSupplier = () -> false;
     private boolean returnFinalResponseWhenStreamed;
-    private final PromptAssembler promptAssembler = PromptAssembler.createDefault();
 
     public Agent(LlmClient llmClient) {
         this(llmClient, new ToolRegistry());
@@ -72,6 +72,30 @@ public class Agent {
         this.memoryManager.setProjectPath(this.toolRegistry.getProjectPath());
         this.toolRegistry.setScopedMemorySaver(memoryManager::storeFact);
         conversationHistory.add(LlmClient.Message.system(buildSystemPrompt("")));
+    }
+
+    private static String formatLine(String label, int tokens, int window, int count) {
+        double pct = window > 0 ? (double) tokens / window * 100 : 0;
+        String countLabel = count >= 0 ? String.format("  [%d 条]", count) : "";
+        return String.format("    %-18s %8s  (%4.1f%%)%s%n",
+                label + ":", formatTokens(tokens), pct, countLabel);
+    }
+
+    private static String progressBar(double ratio, int width) {
+        ratio = Math.max(0, Math.min(1, ratio));
+        int filled = (int) Math.round(ratio * width);
+        StringBuilder bar = new StringBuilder("[");
+        for (int i = 0; i < width; i++) {
+            bar.append(i < filled ? '█' : '░');
+        }
+        bar.append("]");
+        return bar.toString();
+    }
+
+    private static String formatTokens(int tokens) {
+        if (tokens >= 1_000_000) return String.format("%.1fM", tokens / 1_000_000.0);
+        if (tokens >= 1_000) return String.format("%.1fk", tokens / 1_000.0);
+        return String.valueOf(tokens);
     }
 
     public void setLlmClient(LlmClient llmClient) {
@@ -269,9 +293,6 @@ public class Agent {
             log.warn("manual conversationHistory compaction failed", e);
             return new CompactionResult(false, beforeTokens, estimateCurrentContextTokens(), e.getMessage());
         }
-    }
-
-    public record CompactionResult(boolean compacted, long beforeTokens, long afterTokens, String error) {
     }
 
     /**
@@ -564,30 +585,6 @@ public class Agent {
         }
     }
 
-    private static String formatLine(String label, int tokens, int window, int count) {
-        double pct = window > 0 ? (double) tokens / window * 100 : 0;
-        String countLabel = count >= 0 ? String.format("  [%d 条]", count) : "";
-        return String.format("    %-18s %8s  (%4.1f%%)%s%n",
-                label + ":", formatTokens(tokens), pct, countLabel);
-    }
-
-    private static String progressBar(double ratio, int width) {
-        ratio = Math.max(0, Math.min(1, ratio));
-        int filled = (int) Math.round(ratio * width);
-        StringBuilder bar = new StringBuilder("[");
-        for (int i = 0; i < width; i++) {
-            bar.append(i < filled ? '█' : '░');
-        }
-        bar.append("]");
-        return bar.toString();
-    }
-
-    private static String formatTokens(int tokens) {
-        if (tokens >= 1_000_000) return String.format("%.1fM", tokens / 1_000_000.0);
-        if (tokens >= 1_000) return String.format("%.1fk", tokens / 1_000.0);
-        return String.valueOf(tokens);
-    }
-
     public ToolRegistry getToolRegistry() {
         return toolRegistry;
     }
@@ -780,6 +777,9 @@ public class Agent {
             return normalized;
         }
         return normalized.substring(0, maxLength) + "...";
+    }
+
+    public record CompactionResult(boolean compacted, long beforeTokens, long afterTokens, String error) {
     }
 
     /**

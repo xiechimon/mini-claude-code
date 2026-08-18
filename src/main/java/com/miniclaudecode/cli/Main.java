@@ -101,63 +101,6 @@ public class Main {
             }
             """;
 
-    enum EscapeSequenceType {
-        STANDALONE_ESC,
-        BRACKETED_PASTE,
-        CONTROL_SEQUENCE,
-        OTHER
-    }
-
-    private record PromptInput(String text, boolean canceled) {
-        static PromptInput submitted(String text) {
-            return new PromptInput(text, false);
-        }
-
-        static PromptInput canceledInput() {
-            return new PromptInput("", true);
-        }
-    }
-
-    private record PrefillResult(String seedBuffer, boolean canceled, boolean submitted) {
-        static PrefillResult canceledInput() {
-            return new PrefillResult("", true, false);
-        }
-
-        static PrefillResult submittedInput() {
-            return new PrefillResult("", false, true);
-        }
-
-        static PrefillResult seed(String seedBuffer) {
-            return new PrefillResult(seedBuffer, false, false);
-        }
-    }
-
-    private record KeyReadResult(Integer key, boolean ignoredControlSequence) {
-        static KeyReadResult keyPressed(int key) {
-            return new KeyReadResult(key, false);
-        }
-
-        static KeyReadResult ignoredSequence() {
-            return new KeyReadResult(null, true);
-        }
-
-        static KeyReadResult unavailable() {
-            return new KeyReadResult(null, false);
-        }
-    }
-
-    private record StartupScreenInfo(
-            String model,
-            String provider,
-            long mcpReady,
-            int mcpTotal,
-            int mcpTools,
-            int skillsEnabled,
-            int skillsTotal,
-            String note
-    ) {
-    }
-
     public static void main(String[] args) {
         configureAwtForCli();
         if (WechatCommandMain.isWechatCommand(args)) {
@@ -991,58 +934,6 @@ public class Main {
         throw new IllegalStateException("等待扫码超时");
     }
 
-    private static final class WechatRuntimeController {
-        private final Renderer renderer;
-        private WechatMessageLoop loop;
-        private Thread thread;
-        private WechatAccount account;
-
-        private WechatRuntimeController(Renderer renderer) {
-            this.renderer = renderer;
-        }
-
-        synchronized String start(WechatAccount account) {
-            if (isRunning()) {
-                return "微信通道已在运行，账号: " + this.account.accountId();
-            }
-            this.account = account;
-            this.loop = new WechatMessageLoop(new IlinkClient(), WechatAccountStore.createDefault(), account, renderer);
-            this.thread = new Thread(() -> {
-                try {
-                    loop.run();
-                } catch (Exception e) {
-                    System.err.println("微信通道已退出: " + e.getMessage());
-                }
-            }, "mini-claude-code-wechat-channel");
-            this.thread.setDaemon(true);
-            this.thread.start();
-            return "微信通道已启动，账号: " + account.accountId();
-        }
-
-        synchronized void stop() {
-            if (loop != null) {
-                loop.stop();
-            }
-            if (thread != null) {
-                thread.interrupt();
-            }
-            loop = null;
-            thread = null;
-        }
-
-        synchronized String status() {
-            if (isRunning()) {
-                return "微信通道运行中，账号: " + account.accountId()
-                        + "\n工作区: " + account.workspace();
-            }
-            return "微信通道未运行。输入 /wechat 启动。";
-        }
-
-        private boolean isRunning() {
-            return thread != null && thread.isAlive();
-        }
-    }
-
     static PlanExecuteAgent createPlanAgent(LlmClient llmClient, Agent reactAgent,
                                             PlanExecuteAgent.PlanReviewHandler reviewHandler) {
         return new PlanExecuteAgent(
@@ -1480,9 +1371,6 @@ public class Main {
                 "任务运行中按 ESC 取消当前任务",
                 "默认模式是 ReAct"
         );
-    }
-
-    record SlashCommandHint(String insertText, String display, String description) {
     }
 
     static List<SlashCommandHint> slashCommandHints() {
@@ -2817,6 +2705,118 @@ public class Main {
         } catch (Exception e) {
             return path;
         }
+    }
+
+    enum EscapeSequenceType {
+        STANDALONE_ESC,
+        BRACKETED_PASTE,
+        CONTROL_SEQUENCE,
+        OTHER
+    }
+
+    private record PromptInput(String text, boolean canceled) {
+        static PromptInput submitted(String text) {
+            return new PromptInput(text, false);
+        }
+
+        static PromptInput canceledInput() {
+            return new PromptInput("", true);
+        }
+    }
+
+    private record PrefillResult(String seedBuffer, boolean canceled, boolean submitted) {
+        static PrefillResult canceledInput() {
+            return new PrefillResult("", true, false);
+        }
+
+        static PrefillResult submittedInput() {
+            return new PrefillResult("", false, true);
+        }
+
+        static PrefillResult seed(String seedBuffer) {
+            return new PrefillResult(seedBuffer, false, false);
+        }
+    }
+
+    private record KeyReadResult(Integer key, boolean ignoredControlSequence) {
+        static KeyReadResult keyPressed(int key) {
+            return new KeyReadResult(key, false);
+        }
+
+        static KeyReadResult ignoredSequence() {
+            return new KeyReadResult(null, true);
+        }
+
+        static KeyReadResult unavailable() {
+            return new KeyReadResult(null, false);
+        }
+    }
+
+    private record StartupScreenInfo(
+            String model,
+            String provider,
+            long mcpReady,
+            int mcpTotal,
+            int mcpTools,
+            int skillsEnabled,
+            int skillsTotal,
+            String note
+    ) {
+    }
+
+    private static final class WechatRuntimeController {
+        private final Renderer renderer;
+        private WechatMessageLoop loop;
+        private Thread thread;
+        private WechatAccount account;
+
+        private WechatRuntimeController(Renderer renderer) {
+            this.renderer = renderer;
+        }
+
+        synchronized String start(WechatAccount account) {
+            if (isRunning()) {
+                return "微信通道已在运行，账号: " + this.account.accountId();
+            }
+            this.account = account;
+            this.loop = new WechatMessageLoop(new IlinkClient(), WechatAccountStore.createDefault(), account, renderer);
+            this.thread = new Thread(() -> {
+                try {
+                    loop.run();
+                } catch (Exception e) {
+                    System.err.println("微信通道已退出: " + e.getMessage());
+                }
+            }, "mini-claude-code-wechat-channel");
+            this.thread.setDaemon(true);
+            this.thread.start();
+            return "微信通道已启动，账号: " + account.accountId();
+        }
+
+        synchronized void stop() {
+            if (loop != null) {
+                loop.stop();
+            }
+            if (thread != null) {
+                thread.interrupt();
+            }
+            loop = null;
+            thread = null;
+        }
+
+        synchronized String status() {
+            if (isRunning()) {
+                return "微信通道运行中，账号: " + account.accountId()
+                        + "\n工作区: " + account.workspace();
+            }
+            return "微信通道未运行。输入 /wechat 启动。";
+        }
+
+        private boolean isRunning() {
+            return thread != null && thread.isAlive();
+        }
+    }
+
+    record SlashCommandHint(String insertText, String display, String description) {
     }
 
     record McpConfigBootstrapResult(boolean created, String message) {

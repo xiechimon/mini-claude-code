@@ -34,6 +34,17 @@ class McpServerManagerTest {
     private ToolRegistry registry;
     private McpServerManager manager;
 
+    private static String toolJson(String name, String description) {
+        return "{\"name\":\"" + name + "\",\"description\":\"" + description + "\","
+                + "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}";
+    }
+
+    private static McpServerConfig httpConfig(MockWebServer webServer) {
+        McpServerConfig config = new McpServerConfig();
+        config.setUrl(webServer.url("/mcp").toString());
+        return config;
+    }
+
     @BeforeEach
     void setUp(@TempDir Path tempDir) throws IOException {
         webServer = new MockWebServer();
@@ -214,7 +225,6 @@ class McpServerManagerTest {
         assertTrue(manager.logs("missing").contains("未找到"));
     }
 
-
     private void enqueueInitialize() {
         enqueueInitialize(null);
     }
@@ -255,17 +265,6 @@ class McpServerManagerTest {
                           {"name":"review","title":"Review","description":"Review code"}
                         ]}}
                         """));
-    }
-
-    private static String toolJson(String name, String description) {
-        return "{\"name\":\"" + name + "\",\"description\":\"" + description + "\","
-                + "\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}";
-    }
-
-    private static McpServerConfig httpConfig(MockWebServer webServer) {
-        McpServerConfig config = new McpServerConfig();
-        config.setUrl(webServer.url("/mcp").toString());
-        return config;
     }
 
     private void loadServersFromMap(Map<String, McpServerConfig> configs) {

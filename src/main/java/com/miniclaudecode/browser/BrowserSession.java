@@ -10,10 +10,10 @@ import java.util.Set;
  * 由 Main 持有并注入 ToolRegistry，避免做全局单例污染测试与多会话运行
  */
 public class BrowserSession {
+    private final Set<String> agentOpenedTabs = new LinkedHashSet<>();
     private BrowserMode mode = BrowserMode.ISOLATED;
     private String browserUrl;
     private String lastNavigatedUrl;
-    private final Set<String> agentOpenedTabs = new LinkedHashSet<>();
 
     public synchronized BrowserMode mode() {
         return mode;

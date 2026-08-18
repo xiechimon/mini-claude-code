@@ -38,7 +38,7 @@ public class RuntimeApiServer implements AutoCloseable {
      * 创建只监听 {@code 127.0.0.1} 的 server，端口为 0 时由系统分配
      *
      * @throws IllegalArgumentException API key 为空
-     * @throws IOException 监听地址无法创建
+     * @throws IOException              监听地址无法创建
      */
     public RuntimeApiServer(RuntimeThreadStore store, TaskRunner runner, int port, String apiKey) throws IOException {
         if (apiKey == null || apiKey.isBlank()) {
@@ -52,13 +52,65 @@ public class RuntimeApiServer implements AutoCloseable {
         this.server.setExecutor(executor);
     }
 
-    /** 按系统属性优先、环境变量兜底的顺序读取 API key */
+    /**
+     * 按系统属性优先、环境变量兜底的顺序读取 API key
+     */
     public static String configuredApiKey() {
         String configured = System.getProperty("mini-claude-code.runtime.api.key");
         if (configured == null || configured.isBlank()) {
             configured = System.getenv("MINI_CLAUDE_CODE_RUNTIME_API_KEY");
         }
         return configured;
+    }
+
+    private static String threadId(String path) {
+        String[] parts = path.split("/");
+        return parts.length >= 4 ? parts[3] : "";
+    }
+
+    private static long parseAfter(String query) {
+        if (query == null || query.isBlank()) {
+            return 0;
+        }
+        for (String part : query.split("&")) {
+            if (part.startsWith("after=")) {
+                try {
+                    return Long.parseLong(part.substring("after=".length()));
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static String formatSse(List<RuntimeEvent> events) {
+        StringBuilder sb = new StringBuilder();
+        for (RuntimeEvent event : events) {
+            sb.append("id: ").append(event.id()).append('\n');
+            sb.append("event: ").append(event.type()).append('\n');
+            sb.append("data: ").append(event.data()).append("\n\n");
+        }
+        return sb.toString();
+    }
+
+    private static void writeJson(HttpExchange exchange, int status, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
     }
 
     public void start() {
@@ -146,56 +198,6 @@ public class RuntimeApiServer implements AutoCloseable {
         String auth = exchange.getRequestHeaders().getFirst("Authorization");
         String direct = exchange.getRequestHeaders().getFirst("X-Mini-Claude-Code-API-Key");
         return ("Bearer " + apiKey).equals(auth) || apiKey.equals(direct);
-    }
-
-    private static String threadId(String path) {
-        String[] parts = path.split("/");
-        return parts.length >= 4 ? parts[3] : "";
-    }
-
-    private static long parseAfter(String query) {
-        if (query == null || query.isBlank()) {
-            return 0;
-        }
-        for (String part : query.split("&")) {
-            if (part.startsWith("after=")) {
-                try {
-                    return Long.parseLong(part.substring("after=".length()));
-                } catch (NumberFormatException ignored) {
-                    return 0;
-                }
-            }
-        }
-        return 0;
-    }
-
-    private static String formatSse(List<RuntimeEvent> events) {
-        StringBuilder sb = new StringBuilder();
-        for (RuntimeEvent event : events) {
-            sb.append("id: ").append(event.id()).append('\n');
-            sb.append("event: ").append(event.type()).append('\n');
-            sb.append("data: ").append(event.data()).append("\n\n");
-        }
-        return sb.toString();
-    }
-
-    private static void writeJson(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
-        }
-    }
-
-    private static String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n");
     }
 
     @Override

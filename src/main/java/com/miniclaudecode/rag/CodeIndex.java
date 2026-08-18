@@ -19,16 +19,6 @@ public class CodeIndex {
     private final CodeAnalyzer analyzer;
     private final ProgressListener progressListener;
 
-    @FunctionalInterface
-    public interface ProgressListener {
-        void onProgress(String message);
-
-        static ProgressListener noop() {
-            return message -> {
-            };
-        }
-    }
-
     public CodeIndex() {
         this(new EmbeddingClient(), ProgressListener.noop());
     }
@@ -162,6 +152,16 @@ public class CodeIndex {
             emit("❌ " + message);
             log.warn("code index file traversal failed for root {}", root, e);
         }
+    }
+
+    @FunctionalInterface
+    public interface ProgressListener {
+        static ProgressListener noop() {
+            return message -> {
+            };
+        }
+
+        void onProgress(String message);
     }
 
     public record IndexResult(int chunkCount, int relationCount, String message) {

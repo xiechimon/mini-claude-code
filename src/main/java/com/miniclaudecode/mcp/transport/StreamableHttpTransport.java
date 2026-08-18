@@ -37,6 +37,28 @@ public class StreamableHttpTransport implements McpTransport {
         this.headers = headers == null ? Map.of() : Map.copyOf(headers);
     }
 
+    private static List<JsonNode> parseSse(String raw) throws IOException {
+        List<JsonNode> messages = new ArrayList<>();
+        StringBuilder data = new StringBuilder();
+        for (String line : raw.split("\\R")) {
+            if (line.isBlank()) {
+                if (!data.isEmpty()) {
+                    messages.add(MAPPER.readTree(data.toString()));
+                    data.setLength(0);
+                }
+                continue;
+            }
+            if (line.startsWith("data:")) {
+                if (!data.isEmpty()) data.append('\n');
+                data.append(line.substring("data:".length()).trim());
+            }
+        }
+        if (!data.isEmpty()) {
+            messages.add(MAPPER.readTree(data.toString()));
+        }
+        return messages;
+    }
+
     @Override
     public void send(JsonNode message) throws IOException {
         RequestBody body = RequestBody.create(MAPPER.writeValueAsString(message), JSON);
@@ -115,27 +137,5 @@ public class StreamableHttpTransport implements McpTransport {
         } catch (IOException ignored) {
             // 退出流程不等待关闭失败
         }
-    }
-
-    private static List<JsonNode> parseSse(String raw) throws IOException {
-        List<JsonNode> messages = new ArrayList<>();
-        StringBuilder data = new StringBuilder();
-        for (String line : raw.split("\\R")) {
-            if (line.isBlank()) {
-                if (!data.isEmpty()) {
-                    messages.add(MAPPER.readTree(data.toString()));
-                    data.setLength(0);
-                }
-                continue;
-            }
-            if (line.startsWith("data:")) {
-                if (!data.isEmpty()) data.append('\n');
-                data.append(line.substring("data:".length()).trim());
-            }
-        }
-        if (!data.isEmpty()) {
-            messages.add(MAPPER.readTree(data.toString()));
-        }
-        return messages;
     }
 }

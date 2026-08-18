@@ -13,9 +13,9 @@ import java.util.stream.Collectors;
  */
 public class ConversationMemory implements Memory {
     private final LinkedHashMap<String, MemoryEntry> entries;
+    private final List<MemoryEntry> compressedSummaries;
     private int maxTokens;
     private int currentTokens;
-    private final List<MemoryEntry> compressedSummaries;
 
     /**
      * @param maxTokens 最大 token 预算，超出时触发压缩

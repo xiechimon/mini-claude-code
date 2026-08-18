@@ -12,41 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AtMentionCompleterTest {
-    @Test
-    void suggestsResourcesWhenWordStartsWithAt() {
-        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(resource("fs", "file://README.md")));
-        List<Candidate> candidates = new ArrayList<>();
-
-        completer.complete(null, parsed("@"), candidates);
-
-        assertEquals(1, candidates.size());
-        assertEquals("@fs:file://README.md", candidates.get(0).value());
-    }
-
-    @Test
-    void filtersByPrefix() {
-        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(
-                resource("fs", "file://README.md"),
-                resource("repo", "git://main")
-        ));
-        List<Candidate> candidates = new ArrayList<>();
-
-        completer.complete(null, parsed("@rep"), candidates);
-
-        assertEquals(1, candidates.size());
-        assertEquals("@repo:git://main", candidates.get(0).value());
-    }
-
-    @Test
-    void ignoresNormalWords() {
-        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(resource("fs", "file://README.md")));
-        List<Candidate> candidates = new ArrayList<>();
-
-        completer.complete(null, parsed("hello"), candidates);
-
-        assertTrue(candidates.isEmpty());
-    }
-
     private static McpResourceDescriptor resource(String server, String uri) {
         return new McpResourceDescriptor(server, uri, "name", "", "desc", "text/plain", null);
     }
@@ -83,5 +48,40 @@ class AtMentionCompleterTest {
                 return word.length();
             }
         };
+    }
+
+    @Test
+    void suggestsResourcesWhenWordStartsWithAt() {
+        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(resource("fs", "file://README.md")));
+        List<Candidate> candidates = new ArrayList<>();
+
+        completer.complete(null, parsed("@"), candidates);
+
+        assertEquals(1, candidates.size());
+        assertEquals("@fs:file://README.md", candidates.get(0).value());
+    }
+
+    @Test
+    void filtersByPrefix() {
+        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(
+                resource("fs", "file://README.md"),
+                resource("repo", "git://main")
+        ));
+        List<Candidate> candidates = new ArrayList<>();
+
+        completer.complete(null, parsed("@rep"), candidates);
+
+        assertEquals(1, candidates.size());
+        assertEquals("@repo:git://main", candidates.get(0).value());
+    }
+
+    @Test
+    void ignoresNormalWords() {
+        AtMentionCompleter completer = new AtMentionCompleter(() -> List.of(resource("fs", "file://README.md")));
+        List<Candidate> candidates = new ArrayList<>();
+
+        completer.complete(null, parsed("hello"), candidates);
+
+        assertTrue(candidates.isEmpty());
     }
 }

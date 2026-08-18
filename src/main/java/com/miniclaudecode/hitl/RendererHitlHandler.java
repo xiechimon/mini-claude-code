@@ -17,9 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class RendererHitlHandler implements HitlHandler {
 
     private final Renderer renderer;
-    private volatile boolean enabled;
     private final Set<String> approvedAllByTool = ConcurrentHashMap.newKeySet();
     private final Set<String> approvedAllByServer = ConcurrentHashMap.newKeySet();
+    private volatile boolean enabled;
 
     public RendererHitlHandler(Renderer renderer, boolean enabled) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");

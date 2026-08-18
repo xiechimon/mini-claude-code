@@ -12,6 +12,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConversationHistoryCompactorTest {
 
+    private static String longText(int chars) {
+        StringBuilder sb = new StringBuilder(chars);
+        for (int i = 0; i < chars; i++) sb.append('x');
+        return sb.toString();
+    }
+
     @Test
     void doesNothingWhenBelowTrigger() {
         StubCompactor c = new StubCompactor("MOCK SUMMARY", 3);
@@ -164,12 +170,6 @@ class ConversationHistoryCompactorTest {
 
         assertFalse(compacted);
         assertEquals(before, history.size());
-    }
-
-    private static String longText(int chars) {
-        StringBuilder sb = new StringBuilder(chars);
-        for (int i = 0; i < chars; i++) sb.append('x');
-        return sb.toString();
     }
 
     /**

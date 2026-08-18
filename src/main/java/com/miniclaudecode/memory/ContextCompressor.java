@@ -17,9 +17,6 @@ import java.util.UUID;
  * 3. 压缩后的摘要回注到 ConversationMemory
  */
 public class ContextCompressor {
-    private LlmClient llmClient;
-    private final int retainRecentRounds;
-
     private static final String MAP_PROMPT = """
             请将以下对话片段压缩成一段简洁的摘要，保留关键信息：
             - 用户的需求和意图
@@ -32,7 +29,6 @@ public class ContextCompressor {
             
             请用中文输出摘要，控制在200字以内。
             """;
-
     private static final String REDUCE_PROMPT = """
             请将以下多个摘要合并成一个整体摘要，保留所有关键信息。
             
@@ -41,7 +37,6 @@ public class ContextCompressor {
             
             请用中文输出合并摘要，控制在300字以内。
             """;
-
     private static final String EXTRACT_FACTS_PROMPT = """
             请从以下对话中提取“跨会话仍然成立、未来复用仍有价值”的稳定事实，格式为每行一条：
             - 用户偏好和习惯
@@ -60,24 +55,19 @@ public class ContextCompressor {
             
             请每行一条事实，不要多余解释。
             """;
-
     private static final List<String> EPHEMERAL_FACT_PREFIXES = List.of(
             "用户想", "用户要", "用户需要", "用户请求", "帮我", "让我",
             "新建", "创建", "删除", "修改", "生成", "补充要求", "当前这一轮", "本次任务"
     );
-
     private static final List<String> SPECULATION_CUES = List.of(
             "可能", "应该", "猜测", "推测", "笔误", "提醒"
     );
-
     private static final List<String> DURABLE_FACT_HINTS = List.of(
             "用户偏好", "用户习惯", "喜欢", "倾向", "项目", "仓库", "路径", "技术栈",
             "版本", "模型", "接口", "配置", "环境变量", "命令", "约定", "规则", "默认"
     );
-
-    public void setLlmClient(LlmClient llmClient) {
-        this.llmClient = llmClient;
-    }
+    private final int retainRecentRounds;
+    private LlmClient llmClient;
 
     public ContextCompressor(LlmClient llmClient) {
         this(llmClient, 3);
@@ -90,6 +80,10 @@ public class ContextCompressor {
     public ContextCompressor(LlmClient llmClient, int retainRecentRounds) {
         this.llmClient = llmClient;
         this.retainRecentRounds = retainRecentRounds;
+    }
+
+    public void setLlmClient(LlmClient llmClient) {
+        this.llmClient = llmClient;
     }
 
     /**

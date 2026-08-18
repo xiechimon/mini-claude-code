@@ -25,6 +25,27 @@ public record WechatAccountStore(Path root) {
         return new WechatAccountStore(WechatPaths.root());
     }
 
+    private static void secureDirectory(Path dir) {
+        try {
+            if (Files.exists(dir)) {
+                Files.setPosixFilePermissions(dir, Set.of(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                        PosixFilePermission.OWNER_EXECUTE));
+            }
+        } catch (UnsupportedOperationException | IOException ignored) {
+        }
+    }
+
+    private static void secureFile(Path file) {
+        try {
+            Files.setPosixFilePermissions(file, Set.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE));
+        } catch (UnsupportedOperationException | IOException ignored) {
+        }
+    }
+
     public Optional<WechatAccount> loadLatest() {
         Path file = accountFile();
         if (!Files.exists(file)) {
@@ -79,26 +100,5 @@ public record WechatAccountStore(Path root) {
 
     private Path accountFile() {
         return root.resolve("accounts").resolve("latest.json");
-    }
-
-    private static void secureDirectory(Path dir) {
-        try {
-            if (Files.exists(dir)) {
-                Files.setPosixFilePermissions(dir, Set.of(
-                        PosixFilePermission.OWNER_READ,
-                        PosixFilePermission.OWNER_WRITE,
-                        PosixFilePermission.OWNER_EXECUTE));
-            }
-        } catch (UnsupportedOperationException | IOException ignored) {
-        }
-    }
-
-    private static void secureFile(Path file) {
-        try {
-            Files.setPosixFilePermissions(file, Set.of(
-                    PosixFilePermission.OWNER_READ,
-                    PosixFilePermission.OWNER_WRITE));
-        } catch (UnsupportedOperationException | IOException ignored) {
-        }
     }
 }

@@ -21,7 +21,9 @@ public final class McpSchemaSanitizer {
     private McpSchemaSanitizer() {
     }
 
-    /** 清理 schema 副本，空值或非对象输入降级为 object schema */
+    /**
+     * 清理 schema 副本，空值或非对象输入降级为 object schema
+     */
     public static JsonNode sanitize(JsonNode schema) {
         if (schema == null || schema.isNull() || schema.isMissingNode()) {
             ObjectNode fallback = MAPPER.createObjectNode();

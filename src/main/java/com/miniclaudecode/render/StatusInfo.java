@@ -82,6 +82,10 @@ public record StatusInfo(
         );
     }
 
+    private static String normalizeSummary(String summary) {
+        return summary == null || summary.isBlank() ? null : summary.trim();
+    }
+
     public StatusInfo withEnvironment(String mcpSummary, String skillSummary) {
         return new StatusInfo(
                 model,
@@ -97,9 +101,5 @@ public record StatusInfo(
                 normalizeSummary(mcpSummary),
                 normalizeSummary(skillSummary)
         );
-    }
-
-    private static String normalizeSummary(String summary) {
-        return summary == null || summary.isBlank() ? null : summary.trim();
     }
 }

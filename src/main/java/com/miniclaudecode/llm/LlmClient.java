@@ -15,7 +15,9 @@ import java.util.List;
  */
 public interface LlmClient {
 
-    /** 发起对话并返回完整响应 */
+    /**
+     * 发起对话并返回完整响应
+     */
     ChatResponse chat(List<Message> messages, List<Tool> tools) throws IOException;
 
     /**
@@ -47,6 +49,20 @@ public interface LlmClient {
 
     default String promptCacheMode() {
         return "none";
+    }
+
+    /**
+     * 流式响应观察者，回调运行在 {@code chat} 调用线程并保持接收顺序
+     */
+    interface StreamListener {
+        StreamListener NO_OP = new StreamListener() {
+        };
+
+        default void onReasoningDelta(String delta) {
+        }
+
+        default void onContentDelta(String delta) {
+        }
     }
 
     record ContentPart(String type, String text, String imageBase64, String imageUrl, String mimeType) {
@@ -116,6 +132,34 @@ public interface LlmClient {
             return new Message("tool", content, null, null, toolCallId);
         }
 
+        private static String plainText(List<ContentPart> parts) {
+            if (parts == null || parts.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            int imageCount = 0;
+            for (ContentPart part : parts) {
+                if (part == null) {
+                    continue;
+                }
+                if (part.isText() && part.text() != null && !part.text().isBlank()) {
+                    if (!sb.isEmpty()) {
+                        sb.append("\n\n");
+                    }
+                    sb.append(part.text());
+                } else if (part.isImage()) {
+                    imageCount++;
+                }
+            }
+            if (imageCount > 0) {
+                if (!sb.isEmpty()) {
+                    sb.append("\n\n");
+                }
+                sb.append("[已附加 ").append(imageCount).append(" 张图片]");
+            }
+            return sb.toString();
+        }
+
         public boolean hasContentParts() {
             return contentParts != null && !contentParts.isEmpty();
         }
@@ -170,34 +214,6 @@ public interface LlmClient {
             }
             return new Message(role, content, null, toolCalls, toolCallId, contentParts);
         }
-
-        private static String plainText(List<ContentPart> parts) {
-            if (parts == null || parts.isEmpty()) {
-                return "";
-            }
-            StringBuilder sb = new StringBuilder();
-            int imageCount = 0;
-            for (ContentPart part : parts) {
-                if (part == null) {
-                    continue;
-                }
-                if (part.isText() && part.text() != null && !part.text().isBlank()) {
-                    if (!sb.isEmpty()) {
-                        sb.append("\n\n");
-                    }
-                    sb.append(part.text());
-                } else if (part.isImage()) {
-                    imageCount++;
-                }
-            }
-            if (imageCount > 0) {
-                if (!sb.isEmpty()) {
-                    sb.append("\n\n");
-                }
-                sb.append("[已附加 ").append(imageCount).append(" 张图片]");
-            }
-            return sb.toString();
-        }
     }
 
     record ToolCall(String id, Function function) {
@@ -206,18 +222,6 @@ public interface LlmClient {
     }
 
     record Tool(String name, String description, JsonNode parameters) {
-    }
-
-    /** 流式响应观察者，回调运行在 {@code chat} 调用线程并保持接收顺序 */
-    interface StreamListener {
-        StreamListener NO_OP = new StreamListener() {
-        };
-
-        default void onReasoningDelta(String delta) {
-        }
-
-        default void onContentDelta(String delta) {
-        }
     }
 
     record ChatResponse(String role, String content, String reasoningContent, List<ToolCall> toolCalls,

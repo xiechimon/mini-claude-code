@@ -18,6 +18,8 @@ import java.util.UUID;
  */
 public class MemoryManager {
     private static final Logger log = LoggerFactory.getLogger(MemoryManager.class);
+    // 完整工具结果已保存在消息历史，短期记忆只保留摘要
+    private static final int MAX_TOOL_RESULT_CHARS = 500;
     private final ConversationMemory shortTermMemory;
     private final LongTermMemory longTermMemory;
     private final ContextCompressor compressor;
@@ -51,6 +53,30 @@ public class MemoryManager {
         this.retriever = new MemoryRetriever(shortTermMemory, this.longTermMemory);
         this.tokenBudget = new TokenBudget(contextProfile.maxContextWindow());
         this.currentProject = defaultProjectKey();
+    }
+
+    private static String normalizeScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return "project";
+        }
+        String normalized = scope.trim().toLowerCase();
+        return "global".equals(normalized) ? "global" : "project";
+    }
+
+    private static String defaultProjectKey() {
+        return normalizeProjectKey(System.getProperty("user.dir"));
+    }
+
+    private static String normalizeProjectKey(String path) {
+        try {
+            Path candidate = Path.of(path).toAbsolutePath().normalize();
+            if (java.nio.file.Files.exists(candidate)) {
+                return candidate.toRealPath().toString();
+            }
+            return candidate.toString();
+        } catch (Exception e) {
+            return Path.of(path).toAbsolutePath().normalize().toString();
+        }
     }
 
     public void setLlmClient(LlmClient llmClient) {
@@ -94,9 +120,6 @@ public class MemoryManager {
         shortTermMemory.store(entry);
         compressIfNeeded();
     }
-
-    // 完整工具结果已保存在消息历史，短期记忆只保留摘要
-    private static final int MAX_TOOL_RESULT_CHARS = 500;
 
     /**
      * 过长工具结果会截断，避免单次调用耗尽短期记忆预算
@@ -221,29 +244,5 @@ public class MemoryManager {
 
     public String getCurrentProject() {
         return currentProject;
-    }
-
-    private static String normalizeScope(String scope) {
-        if (scope == null || scope.isBlank()) {
-            return "project";
-        }
-        String normalized = scope.trim().toLowerCase();
-        return "global".equals(normalized) ? "global" : "project";
-    }
-
-    private static String defaultProjectKey() {
-        return normalizeProjectKey(System.getProperty("user.dir"));
-    }
-
-    private static String normalizeProjectKey(String path) {
-        try {
-            Path candidate = Path.of(path).toAbsolutePath().normalize();
-            if (java.nio.file.Files.exists(candidate)) {
-                return candidate.toRealPath().toString();
-            }
-            return candidate.toString();
-        } catch (Exception e) {
-            return Path.of(path).toAbsolutePath().normalize().toString();
-        }
     }
 }

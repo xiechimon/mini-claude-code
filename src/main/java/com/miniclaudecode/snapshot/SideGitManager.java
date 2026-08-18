@@ -50,6 +50,46 @@ public record SideGitManager(Path projectRoot, SnapshotConfig config, Path gitDi
         this(projectRoot, config, null);
     }
 
+    private static void deleteRecursively(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var walk = Files.walk(root)) {
+            List<Path> paths = walk.sorted(Comparator.reverseOrder()).toList();
+            for (Path path : paths) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    private static Path normalizeProjectRoot(Path path) {
+        Path root = path == null ? Path.of(System.getProperty("user.dir")) : path;
+        return root.toAbsolutePath().normalize();
+    }
+
+    private static String parentKey(Path path) {
+        Path parent = path.getParent();
+        return parent == null ? path.toString() : parent.toString();
+    }
+
+    private static String safeTurnId(String turnId) {
+        return turnId == null || turnId.isBlank() ? "turn-" + Instant.now().toEpochMilli() : turnId.trim();
+    }
+
+    private static String hash(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02x", bytes[i]));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
     public synchronized TurnSnapshot preTurnSnapshot(String turnId, String summary) throws IOException, GitAPIException {
         return createSnapshot(SnapshotPhase.PRE_TURN, turnId, summary);
     }
@@ -160,7 +200,9 @@ public record SideGitManager(Path projectRoot, SnapshotConfig config, Path gitDi
         return sb.toString();
     }
 
-    /** 删除当前项目的 Side-Git 目录，不删除工作区或主仓库内容 */
+    /**
+     * 删除当前项目的 Side-Git 目录，不删除工作区或主仓库内容
+     */
     public synchronized String cleanSnapshots() {
         if (!Files.exists(gitDir)) {
             return "📭 暂无 Side-Git 快照目录";
@@ -316,45 +358,5 @@ public record SideGitManager(Path projectRoot, SnapshotConfig config, Path gitDi
             }
         }
         return false;
-    }
-
-    private static void deleteRecursively(Path root) throws IOException {
-        if (root == null || !Files.exists(root)) {
-            return;
-        }
-        try (var walk = Files.walk(root)) {
-            List<Path> paths = walk.sorted(Comparator.reverseOrder()).toList();
-            for (Path path : paths) {
-                Files.deleteIfExists(path);
-            }
-        }
-    }
-
-    private static Path normalizeProjectRoot(Path path) {
-        Path root = path == null ? Path.of(System.getProperty("user.dir")) : path;
-        return root.toAbsolutePath().normalize();
-    }
-
-    private static String parentKey(Path path) {
-        Path parent = path.getParent();
-        return parent == null ? path.toString() : parent.toString();
-    }
-
-    private static String safeTurnId(String turnId) {
-        return turnId == null || turnId.isBlank() ? "turn-" + Instant.now().toEpochMilli() : turnId.trim();
-    }
-
-    private static String hash(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8; i++) {
-                sb.append(String.format("%02x", bytes[i]));
-            }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
     }
 }

@@ -24,6 +24,27 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AgentOrchestratorTest {
 
+    private static LlmClient.ChatResponse awaitBarrierThenReturn(CountDownLatch latch,
+                                                                 AtomicInteger current,
+                                                                 AtomicInteger peak,
+                                                                 LlmClient.ChatResponse response) {
+        int now = current.incrementAndGet();
+        peak.updateAndGet(prev -> Math.max(prev, now));
+        latch.countDown();
+        try {
+            assertTrue(latch.await(5, TimeUnit.SECONDS), "Both workers should reach chat() concurrently");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            current.decrementAndGet();
+        }
+        return response;
+    }
+
+    private static LlmClient.ChatResponse response(String content) {
+        return new LlmClient.ChatResponse("assistant", content, null, 100, 20);
+    }
+
     @Test
     void shouldParseSimplePlan() {
         AgentOrchestrator orchestrator = new AgentOrchestrator(new GLMClient("test-key"));
@@ -325,23 +346,6 @@ class AgentOrchestratorTest {
         assertEquals(2, peakConcurrency.get(), "Expected two workers to run concurrently");
     }
 
-    private static LlmClient.ChatResponse awaitBarrierThenReturn(CountDownLatch latch,
-                                                                 AtomicInteger current,
-                                                                 AtomicInteger peak,
-                                                                 LlmClient.ChatResponse response) {
-        int now = current.incrementAndGet();
-        peak.updateAndGet(prev -> Math.max(prev, now));
-        latch.countDown();
-        try {
-            assertTrue(latch.await(5, TimeUnit.SECONDS), "Both workers should reach chat() concurrently");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            current.decrementAndGet();
-        }
-        return response;
-    }
-
     @Test
     void shouldReportIncompleteRunWhenFailureBlocksRemainingSteps(@TempDir Path tempDir) {
         StubGLMClient llmClient = new StubGLMClient(List.of(
@@ -378,10 +382,6 @@ class AgentOrchestratorTest {
         assertTrue(finalResult.contains("未完全完成"));
         assertTrue(finalResult.contains("[step_1] ❌ 第一步"));
         assertTrue(finalResult.contains("[step_2] ⏳ 第二步"));
-    }
-
-    private static LlmClient.ChatResponse response(String content) {
-        return new LlmClient.ChatResponse("assistant", content, null, 100, 20);
     }
 
     private static final class NoOpMemoryManager extends MemoryManager {
@@ -427,6 +427,16 @@ class AgentOrchestratorTest {
             this.dispatcher = dispatcher;
         }
 
+        private static String findLastUser(List<Message> messages) {
+            for (int i = messages.size() - 1; i >= 0; i--) {
+                Message m = messages.get(i);
+                if ("user".equals(m.role())) {
+                    return m.content() == null ? "" : m.content();
+                }
+            }
+            return "";
+        }
+
         @Override
         public ChatResponse chat(List<Message> messages, List<Tool> tools) throws IOException {
             return chat(messages, tools, StreamListener.NO_OP);
@@ -443,16 +453,6 @@ class AgentOrchestratorTest {
                 listener.onContentDelta(response.content());
             }
             return response;
-        }
-
-        private static String findLastUser(List<Message> messages) {
-            for (int i = messages.size() - 1; i >= 0; i--) {
-                Message m = messages.get(i);
-                if ("user".equals(m.role())) {
-                    return m.content() == null ? "" : m.content();
-                }
-            }
-            return "";
         }
     }
 }

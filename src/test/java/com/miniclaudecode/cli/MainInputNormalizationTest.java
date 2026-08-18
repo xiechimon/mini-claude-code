@@ -20,6 +20,27 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MainInputNormalizationTest {
 
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
+    }
+
+    private static LineReader newLineReader() throws Exception {
+        Terminal terminal = TerminalBuilder.builder()
+                .dumb(true)
+                .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
+                .build();
+
+        DefaultHistory history = new DefaultHistory();
+        return LineReaderBuilder.builder()
+                .terminal(terminal)
+                .history(history)
+                .build();
+    }
+
     @Test
     void keepsMultilinePasteStructure() {
         String normalized = Main.prepareSeedBuffer("请把任务拆成可并行的 DAG:\n1. 读 pom.xml\r\n2. 列出 src/main/java");
@@ -298,26 +319,5 @@ class MainInputNormalizationTest {
     @Test
     void readEscCancelHandlesNullTerminalSafely() {
         assertFalse(Main.readEscCancel(null));
-    }
-
-    private static void restoreProperty(String key, String value) {
-        if (value == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, value);
-        }
-    }
-
-    private static LineReader newLineReader() throws Exception {
-        Terminal terminal = TerminalBuilder.builder()
-                .dumb(true)
-                .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                .build();
-
-        DefaultHistory history = new DefaultHistory();
-        return LineReaderBuilder.builder()
-                .terminal(terminal)
-                .history(history)
-                .build();
     }
 }

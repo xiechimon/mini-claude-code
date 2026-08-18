@@ -47,65 +47,7 @@ import java.util.stream.Collectors;
 public class PlanExecuteAgent {
     private static final Logger log = LoggerFactory.getLogger(PlanExecuteAgent.class);
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-
-    private record PlanRunOutcome(String result, boolean persistAssistantMessage) {
-        static PlanRunOutcome executed(String result) {
-            return new PlanRunOutcome(result, true);
-        }
-
-        static PlanRunOutcome canceled(String result) {
-            return new PlanRunOutcome(result, false);
-        }
-
-        static PlanRunOutcome failed(String result) {
-            return new PlanRunOutcome(result, true);
-        }
-    }
-
-    private record TaskRunResult(String result, boolean streamedOutput) {
-        static TaskRunResult of(String result, boolean streamedOutput) {
-            return new TaskRunResult(result, streamedOutput);
-        }
-    }
-
-    private record TaskExecutionResult(Task task, String result, boolean streamedOutput, Exception error) {
-        static TaskExecutionResult success(Task task, TaskRunResult taskRunResult) {
-            return new TaskExecutionResult(task, taskRunResult.result(), taskRunResult.streamedOutput(), null);
-        }
-
-        static TaskExecutionResult failure(Task task, Exception error) {
-            return new TaskExecutionResult(task, null, false, error);
-        }
-
-        boolean failed() {
-            return error != null;
-        }
-    }
-
-    public interface PlanReviewHandler {
-        PlanReviewDecision review(String goal, ExecutionPlan plan);
-    }
-
-    public enum PlanReviewAction {
-        EXECUTE,
-        SUPPLEMENT,
-        CANCEL
-    }
-
-    public record PlanReviewDecision(PlanReviewAction action, String feedback) {
-        public static PlanReviewDecision execute() {
-            return new PlanReviewDecision(PlanReviewAction.EXECUTE, null);
-        }
-
-        public static PlanReviewDecision supplement(String feedback) {
-            return new PlanReviewDecision(PlanReviewAction.SUPPLEMENT, feedback);
-        }
-
-        public static PlanReviewDecision cancel() {
-            return new PlanReviewDecision(PlanReviewAction.CANCEL, null);
-        }
-    }
-
+    private static final int MAX_TASK_ITERATIONS = 5;
     private final LlmClient llmClient;
     private final ToolRegistry toolRegistry;
     private final Planner planner;
@@ -113,30 +55,25 @@ public class PlanExecuteAgent {
     private final MemoryManager memoryManager;
     private final ConversationHistoryCompactor historyCompactor;
     private final PrintStream out;
+    private final PromptAssembler promptAssembler = PromptAssembler.createDefault();
     private Supplier<String> externalContextSupplier = () -> "";
     private SkillRegistry skillRegistry;
     private SkillContextBuffer skillContextBuffer;
-    private final PromptAssembler promptAssembler = PromptAssembler.createDefault();
-
     public PlanExecuteAgent(LlmClient llmClient) {
         this(llmClient, (goal, plan) -> PlanReviewDecision.execute());
     }
-
     public PlanExecuteAgent(LlmClient llmClient, PlanReviewHandler reviewHandler) {
         this(llmClient, new ToolRegistry(), null, null, reviewHandler);
     }
-
     public PlanExecuteAgent(LlmClient llmClient, ToolRegistry toolRegistry,
                             MemoryManager memoryManager, PlanReviewHandler reviewHandler) {
         this(llmClient, toolRegistry, null, memoryManager, reviewHandler);
     }
-
     public PlanExecuteAgent(LlmClient llmClient, ToolRegistry toolRegistry,
                             MemoryManager memoryManager, PlanReviewHandler reviewHandler,
                             PrintStream out) {
         this(llmClient, toolRegistry, null, memoryManager, reviewHandler, out);
     }
-
     PlanExecuteAgent(LlmClient llmClient, ToolRegistry toolRegistry, Planner planner,
                      MemoryManager memoryManager, PlanReviewHandler reviewHandler) {
         this(llmClient, toolRegistry, planner, memoryManager, reviewHandler, null);
@@ -175,6 +112,74 @@ public class PlanExecuteAgent {
                 System.out.flush();
             }
         }, true, StandardCharsets.UTF_8);
+    }
+
+    private static void printToolCalls(PrintStream out, List<LlmClient.ToolCall> toolCalls) {
+        Map<String, List<LlmClient.ToolCall>> grouped = new LinkedHashMap<>();
+        for (LlmClient.ToolCall tc : toolCalls) {
+            grouped.computeIfAbsent(tc.function().name(), k -> new ArrayList<>()).add(tc);
+        }
+        for (var group : grouped.entrySet()) {
+            String toolName = group.getKey();
+            List<LlmClient.ToolCall> calls = group.getValue();
+            out.println(AnsiStyle.subtle("  " + toolLabel(toolName, calls.size())));
+            for (LlmClient.ToolCall tc : calls) {
+                String detail = extractKeyParam(toolName, tc.function().arguments());
+                if (!detail.isEmpty()) {
+                    out.println(AnsiStyle.subtle("    └ " + detail));
+                }
+            }
+        }
+    }
+
+    private static String toolLabel(String toolName, int count) {
+        return switch (toolName) {
+            case "read_file" -> "📖 读取 " + count + " 个文件";
+            case "write_file" -> "✏️ 写入 " + count + " 个文件";
+            case "list_dir" -> "📂 列出 " + count + " 个目录";
+            case "execute_command" -> "⚡ 执行 " + count + " 条命令";
+            case "create_project" -> "🏗️ 创建 " + count + " 个项目";
+            case "search_code" -> "🔍 搜索代码 " + count + " 次";
+            case "web_search" -> "🌐 联网搜索 " + count + " 次";
+            case "web_fetch" -> "📰 抓取 " + count + " 个网页";
+            case "save_memory" -> "💾 保存长期记忆 " + count + " 条";
+            default -> toolName != null && toolName.startsWith("mcp__")
+                    ? formatMcpLabel(toolName, count)
+                    : "🔧 " + toolName + " × " + count;
+        };
+    }
+
+    private static String formatMcpLabel(String toolName, int count) {
+        String[] parts = toolName.split("__", 3);
+        String display = parts.length == 3 ? parts[1] + "." + parts[2] : toolName;
+        return count == 1
+                ? "🔌 调用 MCP 工具 " + display
+                : "🔌 调用 MCP 工具 " + display + " × " + count;
+    }
+
+    private static String extractKeyParam(String toolName, String argsJson) {
+        try {
+            JsonNode node = JSON_MAPPER.readTree(argsJson);
+            String key = switch (toolName) {
+                case "read_file", "write_file", "list_dir" -> "path";
+                case "execute_command" -> "command";
+                case "create_project" -> "name";
+                case "search_code", "web_search" -> "query";
+                case "web_fetch" -> "url";
+                case "save_memory" -> "fact";
+                default -> null;
+            };
+            if (key == null) {
+                return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
+            }
+            String value = node.path(key).asText("");
+            if (value.length() > 80) {
+                value = value.substring(0, 77) + "...";
+            }
+            return value;
+        } catch (Exception e) {
+            return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
+        }
     }
 
     public void setExternalContextSupplier(Supplier<String> externalContextSupplier) {
@@ -437,8 +442,6 @@ public class PlanExecuteAgent {
         }
     }
 
-    private static final int MAX_TASK_ITERATIONS = 5;
-
     /**
      * 单个任务可经历多轮 tool call，直到模型给出最终结果或达到轮次上限
      */
@@ -636,71 +639,120 @@ public class PlanExecuteAgent {
         }
     }
 
-    private static void printToolCalls(PrintStream out, List<LlmClient.ToolCall> toolCalls) {
-        Map<String, List<LlmClient.ToolCall>> grouped = new LinkedHashMap<>();
-        for (LlmClient.ToolCall tc : toolCalls) {
-            grouped.computeIfAbsent(tc.function().name(), k -> new ArrayList<>()).add(tc);
-        }
-        for (var group : grouped.entrySet()) {
-            String toolName = group.getKey();
-            List<LlmClient.ToolCall> calls = group.getValue();
-            out.println(AnsiStyle.subtle("  " + toolLabel(toolName, calls.size())));
-            for (LlmClient.ToolCall tc : calls) {
-                String detail = extractKeyParam(toolName, tc.function().arguments());
-                if (!detail.isEmpty()) {
-                    out.println(AnsiStyle.subtle("    └ " + detail));
+    private String buildTaskContext(String goal, ExecutionPlan plan, Task task) {
+        StringBuilder context = new StringBuilder();
+        context.append("总目标：").append(goal).append("\n");
+        context.append("当前任务：").append(task.getDescription()).append("\n");
+
+        if (task.getDependencies().isEmpty()) {
+            context.append("依赖任务：无\n");
+        } else {
+            context.append("依赖任务结果：\n");
+            for (String depId : task.getDependencies()) {
+                Task dep = plan.getTask(depId);
+                if (dep == null) {
+                    continue;
+                }
+                context.append("- ").append(dep.getId())
+                        .append(" / ").append(dep.getDescription())
+                        .append(" / 状态=").append(dep.getStatus())
+                        .append("\n");
+                if (dep.getResult() != null && !dep.getResult().isBlank()) {
+                    context.append(dep.getResult()).append("\n");
                 }
             }
         }
+
+        context.append("请执行此任务。如果是ANALYSIS或VERIFICATION类型，请基于以上上下文直接给出结果。");
+        return context.toString();
     }
 
-    private static String toolLabel(String toolName, int count) {
-        return switch (toolName) {
-            case "read_file" -> "📖 读取 " + count + " 个文件";
-            case "write_file" -> "✏️ 写入 " + count + " 个文件";
-            case "list_dir" -> "📂 列出 " + count + " 个目录";
-            case "execute_command" -> "⚡ 执行 " + count + " 条命令";
-            case "create_project" -> "🏗️ 创建 " + count + " 个项目";
-            case "search_code" -> "🔍 搜索代码 " + count + " 次";
-            case "web_search" -> "🌐 联网搜索 " + count + " 次";
-            case "web_fetch" -> "📰 抓取 " + count + " 个网页";
-            case "save_memory" -> "💾 保存长期记忆 " + count + " 条";
-            default -> toolName != null && toolName.startsWith("mcp__")
-                    ? formatMcpLabel(toolName, count)
-                    : "🔧 " + toolName + " × " + count;
-        };
-    }
+    private String buildFinalResult(ExecutionPlan plan, Map<String, Boolean> streamedTaskOutputs) {
+        StringBuilder result = new StringBuilder();
+        List<Task> leafTasks = plan.getAllTasks().stream()
+                .filter(task -> task.getDependents().isEmpty())
+                .toList();
 
-    private static String formatMcpLabel(String toolName, int count) {
-        String[] parts = toolName.split("__", 3);
-        String display = parts.length == 3 ? parts[1] + "." + parts[2] : toolName;
-        return count == 1
-                ? "🔌 调用 MCP 工具 " + display
-                : "🔌 调用 MCP 工具 " + display + " × " + count;
-    }
-
-    private static String extractKeyParam(String toolName, String argsJson) {
-        try {
-            JsonNode node = JSON_MAPPER.readTree(argsJson);
-            String key = switch (toolName) {
-                case "read_file", "write_file", "list_dir" -> "path";
-                case "execute_command" -> "command";
-                case "create_project" -> "name";
-                case "search_code", "web_search" -> "query";
-                case "web_fetch" -> "url";
-                case "save_memory" -> "fact";
-                default -> null;
-            };
-            if (key == null) {
-                return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
+        for (Task task : leafTasks) {
+            if (Boolean.TRUE.equals(streamedTaskOutputs.get(task.getId()))) {
+                continue;
             }
-            String value = node.path(key).asText("");
-            if (value.length() > 80) {
-                value = value.substring(0, 77) + "...";
+            if (task.getResult() == null || task.getResult().isBlank()) {
+                continue;
             }
-            return value;
-        } catch (Exception e) {
-            return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
+            if (!result.isEmpty()) {
+                result.append("\n");
+            }
+            result.append("[").append(task.getId()).append("] ").append(task.getResult());
+        }
+
+        if (!result.isEmpty()) {
+            return result.toString();
+        }
+
+        return plan.getAllTasks().stream()
+                .filter(task -> !Boolean.TRUE.equals(streamedTaskOutputs.get(task.getId())))
+                .filter(task -> task.getResult() != null && !task.getResult().isBlank())
+                .reduce((first, second) -> second)
+                .map(Task::getResult)
+                .orElse("");
+    }
+
+    public enum PlanReviewAction {
+        EXECUTE,
+        SUPPLEMENT,
+        CANCEL
+    }
+
+    public interface PlanReviewHandler {
+        PlanReviewDecision review(String goal, ExecutionPlan plan);
+    }
+
+    private record PlanRunOutcome(String result, boolean persistAssistantMessage) {
+        static PlanRunOutcome executed(String result) {
+            return new PlanRunOutcome(result, true);
+        }
+
+        static PlanRunOutcome canceled(String result) {
+            return new PlanRunOutcome(result, false);
+        }
+
+        static PlanRunOutcome failed(String result) {
+            return new PlanRunOutcome(result, true);
+        }
+    }
+
+    private record TaskRunResult(String result, boolean streamedOutput) {
+        static TaskRunResult of(String result, boolean streamedOutput) {
+            return new TaskRunResult(result, streamedOutput);
+        }
+    }
+
+    private record TaskExecutionResult(Task task, String result, boolean streamedOutput, Exception error) {
+        static TaskExecutionResult success(Task task, TaskRunResult taskRunResult) {
+            return new TaskExecutionResult(task, taskRunResult.result(), taskRunResult.streamedOutput(), null);
+        }
+
+        static TaskExecutionResult failure(Task task, Exception error) {
+            return new TaskExecutionResult(task, null, false, error);
+        }
+
+        boolean failed() {
+            return error != null;
+        }
+    }
+
+    public record PlanReviewDecision(PlanReviewAction action, String feedback) {
+        public static PlanReviewDecision execute() {
+            return new PlanReviewDecision(PlanReviewAction.EXECUTE, null);
+        }
+
+        public static PlanReviewDecision supplement(String feedback) {
+            return new PlanReviewDecision(PlanReviewAction.SUPPLEMENT, feedback);
+        }
+
+        public static PlanReviewDecision cancel() {
+            return new PlanReviewDecision(PlanReviewAction.CANCEL, null);
         }
     }
 
@@ -842,65 +894,6 @@ public class PlanExecuteAgent {
             renderer.finish();
             lateReasoning.setLength(0);
         }
-    }
-
-    private String buildTaskContext(String goal, ExecutionPlan plan, Task task) {
-        StringBuilder context = new StringBuilder();
-        context.append("总目标：").append(goal).append("\n");
-        context.append("当前任务：").append(task.getDescription()).append("\n");
-
-        if (task.getDependencies().isEmpty()) {
-            context.append("依赖任务：无\n");
-        } else {
-            context.append("依赖任务结果：\n");
-            for (String depId : task.getDependencies()) {
-                Task dep = plan.getTask(depId);
-                if (dep == null) {
-                    continue;
-                }
-                context.append("- ").append(dep.getId())
-                        .append(" / ").append(dep.getDescription())
-                        .append(" / 状态=").append(dep.getStatus())
-                        .append("\n");
-                if (dep.getResult() != null && !dep.getResult().isBlank()) {
-                    context.append(dep.getResult()).append("\n");
-                }
-            }
-        }
-
-        context.append("请执行此任务。如果是ANALYSIS或VERIFICATION类型，请基于以上上下文直接给出结果。");
-        return context.toString();
-    }
-
-    private String buildFinalResult(ExecutionPlan plan, Map<String, Boolean> streamedTaskOutputs) {
-        StringBuilder result = new StringBuilder();
-        List<Task> leafTasks = plan.getAllTasks().stream()
-                .filter(task -> task.getDependents().isEmpty())
-                .toList();
-
-        for (Task task : leafTasks) {
-            if (Boolean.TRUE.equals(streamedTaskOutputs.get(task.getId()))) {
-                continue;
-            }
-            if (task.getResult() == null || task.getResult().isBlank()) {
-                continue;
-            }
-            if (!result.isEmpty()) {
-                result.append("\n");
-            }
-            result.append("[").append(task.getId()).append("] ").append(task.getResult());
-        }
-
-        if (!result.isEmpty()) {
-            return result.toString();
-        }
-
-        return plan.getAllTasks().stream()
-                .filter(task -> !Boolean.TRUE.equals(streamedTaskOutputs.get(task.getId())))
-                .filter(task -> task.getResult() != null && !task.getResult().isBlank())
-                .reduce((first, second) -> second)
-                .map(Task::getResult)
-                .orElse("");
     }
 
 }

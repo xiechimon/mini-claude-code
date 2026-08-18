@@ -6,15 +6,6 @@ package com.miniclaudecode.cli;
  */
 final class PlanReviewInputParser {
 
-    enum DecisionType {
-        EXECUTE,
-        SUPPLEMENT,
-        CANCEL
-    }
-
-    record Decision(DecisionType type, String feedback) {
-    }
-
     private PlanReviewInputParser() {
     }
 
@@ -40,5 +31,14 @@ final class PlanReviewInputParser {
         }
 
         return new Decision(DecisionType.SUPPLEMENT, trimmed);
+    }
+
+    enum DecisionType {
+        EXECUTE,
+        SUPPLEMENT,
+        CANCEL
+    }
+
+    record Decision(DecisionType type, String feedback) {
     }
 }

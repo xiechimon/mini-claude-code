@@ -20,12 +20,11 @@ import java.util.List;
  * - Java 文件：类级别 + 方法级别分块（大方法单独成块）
  */
 public class CodeChunker {
+    // 2000 字符约占 4000–6000 个中文 token，适配最小上下文模型
+    private static final int MAX_CHUNK_CHARS = 2000;
     // JavaParser 与项目语言级别保持 Java 17 一致
     private final JavaParser parser = new JavaParser(
             new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17));
-
-    // 2000 字符约占 4000–6000 个中文 token，适配最小上下文模型
-    private static final int MAX_CHUNK_CHARS = 2000;
 
     /**
      * 对单个文件进行分块

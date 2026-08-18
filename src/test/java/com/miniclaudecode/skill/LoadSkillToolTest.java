@@ -13,6 +13,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoadSkillToolTest {
 
+    private static SkillRegistry registryWith(Path tempDir, String name, String desc, String body) throws IOException {
+        Path userRoot = writeUserSkill(tempDir, name, desc, body).getParent().getParent();
+        SkillStateStore state = new SkillStateStore(tempDir.resolve("skills.json"));
+        SkillRegistry registry = new SkillRegistry(null, userRoot, null, state);
+        registry.reload();
+        return registry;
+    }
+
+    private static Path writeUserSkill(Path tempDir, String name, String desc, String body) throws IOException {
+        Path userRoot = tempDir.resolve("user-skills");
+        Path skillDir = userRoot.resolve(name);
+        Files.createDirectories(skillDir);
+        Path skillMd = skillDir.resolve("SKILL.md");
+        Files.writeString(skillMd,
+                "---\nname: " + name
+                        + "\ndescription: " + desc
+                        + "\n---\n" + body + "\n");
+        return skillMd;
+    }
+
     @Test
     void loadsExistingSkillIntoBuffer(@TempDir Path tempDir) throws IOException {
         SkillRegistry registry = registryWith(tempDir, "web-access", "决策手册",
@@ -91,25 +111,5 @@ class LoadSkillToolTest {
 
         String result = tools.executeTool("load_skill", "{}");
         assertTrue(result.contains("name 不能为空"), result);
-    }
-
-    private static SkillRegistry registryWith(Path tempDir, String name, String desc, String body) throws IOException {
-        Path userRoot = writeUserSkill(tempDir, name, desc, body).getParent().getParent();
-        SkillStateStore state = new SkillStateStore(tempDir.resolve("skills.json"));
-        SkillRegistry registry = new SkillRegistry(null, userRoot, null, state);
-        registry.reload();
-        return registry;
-    }
-
-    private static Path writeUserSkill(Path tempDir, String name, String desc, String body) throws IOException {
-        Path userRoot = tempDir.resolve("user-skills");
-        Path skillDir = userRoot.resolve(name);
-        Files.createDirectories(skillDir);
-        Path skillMd = skillDir.resolve("SKILL.md");
-        Files.writeString(skillMd,
-                "---\nname: " + name
-                        + "\ndescription: " + desc
-                        + "\n---\n" + body + "\n");
-        return skillMd;
     }
 }

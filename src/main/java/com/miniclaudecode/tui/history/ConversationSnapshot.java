@@ -30,76 +30,18 @@ public class ConversationSnapshot {
     private static final Path HISTORY_DIR = Path.of(System.getProperty("user.home"), ".mini-claude-code", "history");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final AtomicLong SESSION_SEQUENCE = new AtomicLong();
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record MessageRecord(
-            String role,        // "user" | "assistant" | "tool"
-            String content,
-            long timestamp,
-            Map<String, Object> metadata
-    ) {
-        public static MessageRecord of(String role, String content) {
-            return new MessageRecord(role, content, System.currentTimeMillis(), Map.of());
-        }
-
-        public static MessageRecord of(String role, String content, Map<String, Object> metadata) {
-            return new MessageRecord(role, content, System.currentTimeMillis(), metadata);
-        }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SessionMeta(
-            String sessionId,
-            String title,          // 会话标题（前几条消息摘要）
-            long createdAt,
-            long lastActiveAt,
-            int messageCount
-    ) {
-    }
-
     private final String sessionId;
     private final Path sessionFile;
     private final List<MessageRecord> messages;
-
     public ConversationSnapshot(String sessionId) {
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId 不能为空");
         this.sessionFile = HISTORY_DIR.resolve(sessionId + ".jsonl");
         this.messages = new ArrayList<>();
     }
 
-    public void append(MessageRecord message) {
-        messages.add(message);
-    }
-
-    public void appendUser(String content) {
-        append(MessageRecord.of("user", content));
-    }
-
-    public void appendAssistant(String content) {
-        append(MessageRecord.of("assistant", content));
-    }
-
-    public List<MessageRecord> getMessages() {
-        return Collections.unmodifiableList(messages);
-    }
-
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    /** 把当前内存增量追加到 JSONL，成功后清空待写消息 */
-    public void save() throws IOException {
-        Files.createDirectories(HISTORY_DIR);
-        try (BufferedWriter writer = Files.newBufferedWriter(sessionFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-            for (MessageRecord msg : messages) {
-                MAPPER.writeValue(writer, msg);
-                writer.newLine();
-            }
-        }
-        messages.clear();
-    }
-
-    /** 加载已有 JSONL，会话不存在时返回空快照 */
+    /**
+     * 加载已有 JSONL，会话不存在时返回空快照
+     */
     public static ConversationSnapshot load(String sessionId) throws IOException {
         Path file = HISTORY_DIR.resolve(sessionId + ".jsonl");
         if (!Files.exists(file)) {
@@ -154,5 +96,65 @@ public class ConversationSnapshot {
 
     public static String generateSessionId() {
         return "session_" + System.currentTimeMillis() + "_" + SESSION_SEQUENCE.incrementAndGet();
+    }
+
+    public void append(MessageRecord message) {
+        messages.add(message);
+    }
+
+    public void appendUser(String content) {
+        append(MessageRecord.of("user", content));
+    }
+
+    public void appendAssistant(String content) {
+        append(MessageRecord.of("assistant", content));
+    }
+
+    public List<MessageRecord> getMessages() {
+        return Collections.unmodifiableList(messages);
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    /**
+     * 把当前内存增量追加到 JSONL，成功后清空待写消息
+     */
+    public void save() throws IOException {
+        Files.createDirectories(HISTORY_DIR);
+        try (BufferedWriter writer = Files.newBufferedWriter(sessionFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
+            for (MessageRecord msg : messages) {
+                MAPPER.writeValue(writer, msg);
+                writer.newLine();
+            }
+        }
+        messages.clear();
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MessageRecord(
+            String role,        // "user" | "assistant" | "tool"
+            String content,
+            long timestamp,
+            Map<String, Object> metadata
+    ) {
+        public static MessageRecord of(String role, String content) {
+            return new MessageRecord(role, content, System.currentTimeMillis(), Map.of());
+        }
+
+        public static MessageRecord of(String role, String content, Map<String, Object> metadata) {
+            return new MessageRecord(role, content, System.currentTimeMillis(), metadata);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SessionMeta(
+            String sessionId,
+            String title,          // 会话标题（前几条消息摘要）
+            long createdAt,
+            long lastActiveAt,
+            int messageCount
+    ) {
     }
 }

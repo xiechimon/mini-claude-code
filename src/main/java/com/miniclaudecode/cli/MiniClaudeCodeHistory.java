@@ -18,14 +18,6 @@ final class MiniClaudeCodeHistory extends DefaultHistory {
     private static final Pattern BASE64_IMAGE = Pattern.compile(
             "(?i).*(data:image/|@image:data:|[A-Za-z0-9+/]{240,}={0,2}).*");
 
-    @Override
-    public void add(Instant time, String line) {
-        if (shouldSkip(line)) {
-            return;
-        }
-        super.add(time, line);
-    }
-
     static boolean shouldSkip(String line) {
         if (line == null) {
             return true;
@@ -44,5 +36,13 @@ final class MiniClaudeCodeHistory extends DefaultHistory {
                 || lower.contains("authorization:")
                 || lower.contains("-----begin ")
                 || lower.contains("private key");
+    }
+
+    @Override
+    public void add(Instant time, String line) {
+        if (shouldSkip(line)) {
+            return;
+        }
+        super.add(time, line);
     }
 }

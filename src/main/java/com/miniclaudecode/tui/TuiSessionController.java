@@ -75,6 +75,47 @@ public final class TuiSessionController implements AutoCloseable {
         });
     }
 
+    private static String captureStdout(ThrowingSupplier<String> supplier) throws Exception {
+        synchronized (STDOUT_CAPTURE_LOCK) {
+            PrintStream originalOut = System.out;
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            try (PrintStream capture = new PrintStream(buffer, true, StandardCharsets.UTF_8)) {
+                System.setOut(capture);
+                String response = supplier.get();
+                capture.flush();
+                String streamed = buffer.toString(StandardCharsets.UTF_8);
+                if (response != null && !response.isBlank()) {
+                    return streamed + (streamed.endsWith("\n") || streamed.isBlank() ? "" : "\n") + response;
+                }
+                return streamed;
+            } finally {
+                System.setOut(originalOut);
+            }
+        }
+    }
+
+    private static String cleanOutput(String output) {
+        if (output == null) {
+            return "";
+        }
+        return output.replaceAll("\\u001B\\[[;\\d]*m", "").trim();
+    }
+
+    private static String formatMemoryEntries(List<MemoryEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return "没有匹配的长期记忆。";
+        }
+        StringBuilder sb = new StringBuilder("长期记忆：\n");
+        for (MemoryEntry entry : entries) {
+            sb.append("- ")
+                    .append(entry.id())
+                    .append(" [").append(LongTermMemory.scopeOf(entry)).append("] ")
+                    .append(entry.content())
+                    .append("\n");
+        }
+        return sb.toString().trim();
+    }
+
     public void submit(String rawInput) {
         String input = rawInput == null ? "" : rawInput.trim();
         if (input.isEmpty()) {
@@ -333,25 +374,6 @@ public final class TuiSessionController implements AutoCloseable {
         }
     }
 
-    private static String captureStdout(ThrowingSupplier<String> supplier) throws Exception {
-        synchronized (STDOUT_CAPTURE_LOCK) {
-            PrintStream originalOut = System.out;
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            try (PrintStream capture = new PrintStream(buffer, true, StandardCharsets.UTF_8)) {
-                System.setOut(capture);
-                String response = supplier.get();
-                capture.flush();
-                String streamed = buffer.toString(StandardCharsets.UTF_8);
-                if (response != null && !response.isBlank()) {
-                    return streamed + (streamed.endsWith("\n") || streamed.isBlank() ? "" : "\n") + response;
-                }
-                return streamed;
-            } finally {
-                System.setOut(originalOut);
-            }
-        }
-    }
-
     private boolean isTaskRunning() {
         Future<?> task = currentTask;
         return task != null && !task.isDone();
@@ -388,28 +410,6 @@ public final class TuiSessionController implements AutoCloseable {
 
     private void ui(Runnable task) {
         uiExecutor.accept(task);
-    }
-
-    private static String cleanOutput(String output) {
-        if (output == null) {
-            return "";
-        }
-        return output.replaceAll("\\u001B\\[[;\\d]*m", "").trim();
-    }
-
-    private static String formatMemoryEntries(List<MemoryEntry> entries) {
-        if (entries == null || entries.isEmpty()) {
-            return "没有匹配的长期记忆。";
-        }
-        StringBuilder sb = new StringBuilder("长期记忆：\n");
-        for (MemoryEntry entry : entries) {
-            sb.append("- ")
-                    .append(entry.id())
-                    .append(" [").append(LongTermMemory.scopeOf(entry)).append("] ")
-                    .append(entry.content())
-                    .append("\n");
-        }
-        return sb.toString().trim();
     }
 
     @Override

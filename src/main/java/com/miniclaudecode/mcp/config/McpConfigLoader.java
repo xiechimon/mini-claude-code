@@ -42,6 +42,38 @@ public class McpConfigLoader {
         this.projectDir = projectDir.toAbsolutePath().normalize();
     }
 
+    private static String readFromDotEnv(Path file, String key) {
+        if (file == null || !Files.exists(file)) {
+            return null;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(file.toFile()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                if (line.startsWith(key + "=")) {
+                    return stripOptionalQuotes(line.substring((key + "=").length()).trim());
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return null;
+    }
+
+    private static String stripOptionalQuotes(String value) {
+        if (value == null || value.length() < 2) {
+            return value;
+        }
+        char first = value.charAt(0);
+        char last = value.charAt(value.length() - 1);
+        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
+    }
+
     /**
      * 只读取并合并配置，不做 {@code ${VAR}} 展开；展开 / 校验由 {@link com.miniclaudecode.mcp.McpServerManager}
      * 在启动单个 server 时进行，确保单个 server 配置错误（如缺失环境变量）不会阻塞其他 server
@@ -159,37 +191,5 @@ public class McpConfigLoader {
             return fromHomeEnv.trim();
         }
         return null;
-    }
-
-    private static String readFromDotEnv(Path file, String key) {
-        if (file == null || !Files.exists(file)) {
-            return null;
-        }
-        try (BufferedReader reader = new BufferedReader(new FileReader(file.toFile()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
-                if (line.startsWith(key + "=")) {
-                    return stripOptionalQuotes(line.substring((key + "=").length()).trim());
-                }
-            }
-        } catch (IOException ignored) {
-        }
-        return null;
-    }
-
-    private static String stripOptionalQuotes(String value) {
-        if (value == null || value.length() < 2) {
-            return value;
-        }
-        char first = value.charAt(0);
-        char last = value.charAt(value.length() - 1);
-        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-            return value.substring(1, value.length() - 1);
-        }
-        return value;
     }
 }

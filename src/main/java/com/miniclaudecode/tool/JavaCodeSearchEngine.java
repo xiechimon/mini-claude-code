@@ -21,6 +21,26 @@ final class JavaCodeSearchEngine implements CodeSearchEngine {
         this.excludedDirs = excludedDirs;
     }
 
+    private static String normalizeGlob(String pattern) {
+        String normalized = pattern == null ? "**/*" : pattern.replace('\\', '/').trim();
+        if (normalized.isEmpty()) {
+            return "**/*";
+        }
+        if (!normalized.contains("/") && !normalized.startsWith("**")) {
+            return "**/" + normalized;
+        }
+        return normalized;
+    }
+
+    private static String normalizeFileNameGlob(String pattern) {
+        String normalized = pattern == null ? "*" : pattern.replace('\\', '/').trim();
+        if (normalized.isEmpty()) {
+            return "*";
+        }
+        int slash = normalized.lastIndexOf('/');
+        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
+    }
+
     @Override
     public CodeSearchResult search(CodeSearchRequest request) {
         Pattern contentPattern;
@@ -129,25 +149,5 @@ final class JavaCodeSearchEngine implements CodeSearchEngine {
             }
         }
         return false;
-    }
-
-    private static String normalizeGlob(String pattern) {
-        String normalized = pattern == null ? "**/*" : pattern.replace('\\', '/').trim();
-        if (normalized.isEmpty()) {
-            return "**/*";
-        }
-        if (!normalized.contains("/") && !normalized.startsWith("**")) {
-            return "**/" + normalized;
-        }
-        return normalized;
-    }
-
-    private static String normalizeFileNameGlob(String pattern) {
-        String normalized = pattern == null ? "*" : pattern.replace('\\', '/').trim();
-        if (normalized.isEmpty()) {
-            return "*";
-        }
-        int slash = normalized.lastIndexOf('/');
-        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
     }
 }

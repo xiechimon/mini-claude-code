@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ToolCallRendererTest {
 
+    private static LlmClient.ToolCall tc(String name, String args) {
+        return new LlmClient.ToolCall(name + "-id", new LlmClient.ToolCall.Function(name, args));
+    }
+
     @Test
     void singleGroupCollapsedHeaderUsesToolLabel() {
         var grouped = ToolCallRenderer.group(List.of(
@@ -111,9 +115,5 @@ class ToolCallRendererTest {
     @Test
     void extractKeyParamReturnsEmptyForNullArgs() {
         assertEquals("", ToolCallRenderer.extractKeyParam("read_file", null));
-    }
-
-    private static LlmClient.ToolCall tc(String name, String args) {
-        return new LlmClient.ToolCall(name + "-id", new LlmClient.ToolCall.Function(name, args));
     }
 }

@@ -44,6 +44,43 @@ public class TokenBudget {
         this.llmCallCount = 0;
     }
 
+    public static int estimateMessagesTokens(List<LlmClient.Message> messages) {
+        if (messages == null) return 0;
+        int total = 0;
+        for (LlmClient.Message msg : messages) {
+            if (msg.contentParts() != null) {
+                for (LlmClient.ContentPart part : msg.contentParts()) {
+                    if (part == null) {
+                        continue;
+                    }
+                    if (part.isText()) {
+                        total += MemoryEntry.estimateTokens(part.text());
+                    } else if (part.isImage()) {
+                        total += estimateImageTokens(part);
+                    }
+                }
+            } else {
+                total += MemoryEntry.estimateTokens(msg.content());
+            }
+            if (msg.toolCalls() != null) {
+                for (LlmClient.ToolCall tc : msg.toolCalls()) {
+                    total += MemoryEntry.estimateTokens(tc.function().arguments());
+                }
+            }
+        }
+        // 每条消息额外开销约 4 tokens（role、separator 等）
+        total += messages.size() * 4;
+        return total;
+    }
+
+    private static int estimateImageTokens(LlmClient.ContentPart part) {
+        if (part.imageBase64() != null && !part.imageBase64().isBlank()) {
+            int bytes = (int) (part.imageBase64().length() * 3L / 4L);
+            return Math.max(256, Math.min(4096, bytes / 768));
+        }
+        return 1024;
+    }
+
     public int getAvailableForConversation() {
         return contextWindow - reservedForSystem - reservedForTools - reservedForResponse;
     }
@@ -108,42 +145,5 @@ public class TokenBudget {
 
     public int getLlmCallCount() {
         return llmCallCount;
-    }
-
-    public static int estimateMessagesTokens(List<LlmClient.Message> messages) {
-        if (messages == null) return 0;
-        int total = 0;
-        for (LlmClient.Message msg : messages) {
-            if (msg.contentParts() != null) {
-                for (LlmClient.ContentPart part : msg.contentParts()) {
-                    if (part == null) {
-                        continue;
-                    }
-                    if (part.isText()) {
-                        total += MemoryEntry.estimateTokens(part.text());
-                    } else if (part.isImage()) {
-                        total += estimateImageTokens(part);
-                    }
-                }
-            } else {
-                total += MemoryEntry.estimateTokens(msg.content());
-            }
-            if (msg.toolCalls() != null) {
-                for (LlmClient.ToolCall tc : msg.toolCalls()) {
-                    total += MemoryEntry.estimateTokens(tc.function().arguments());
-                }
-            }
-        }
-        // 每条消息额外开销约 4 tokens（role、separator 等）
-        total += messages.size() * 4;
-        return total;
-    }
-
-    private static int estimateImageTokens(LlmClient.ContentPart part) {
-        if (part.imageBase64() != null && !part.imageBase64().isBlank()) {
-            int bytes = (int) (part.imageBase64().length() * 3L / 4L);
-            return Math.max(256, Math.min(4096, bytes / 768));
-        }
-        return 1024;
     }
 }

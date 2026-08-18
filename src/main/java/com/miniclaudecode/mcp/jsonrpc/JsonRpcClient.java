@@ -43,10 +43,10 @@ public class JsonRpcClient implements AutoCloseable {
     /**
      * 发起请求并阻塞等待对应 ID 的响应
      *
-     * @param params 可为 {@code null}，此时请求不包含 {@code params}
+     * @param params         可为 {@code null}，此时请求不包含 {@code params}
      * @param timeoutSeconds pending 请求的超时秒数
      * @throws JsonRpcException server 返回 JSON-RPC error
-     * @throws IOException 消息发送失败、等待中断或请求超时
+     * @throws IOException      消息发送失败、等待中断或请求超时
      */
     public JsonNode request(String method, JsonNode params, long timeoutSeconds) throws IOException {
         long id = ids.getAndIncrement();
@@ -91,7 +91,9 @@ public class JsonRpcClient implements AutoCloseable {
         transport.send(notification);
     }
 
-    /** 累加注册 server notification listener，回调线程与 transport 接收线程一致 */
+    /**
+     * 累加注册 server notification listener，回调线程与 transport 接收线程一致
+     */
     public void onNotification(Consumer<JsonNode> listener) {
         if (listener != null) {
             notificationListeners.add(listener);

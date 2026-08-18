@@ -21,7 +21,9 @@ public interface McpTransport extends AutoCloseable {
      */
     void send(JsonNode message) throws IOException;
 
-    /** 注册接收 listener，{@code null} 会被忽略 */
+    /**
+     * 注册接收 listener，{@code null} 会被忽略
+     */
     void onReceive(Consumer<JsonNode> listener);
 
     default List<String> stderrLines() {

@@ -22,9 +22,6 @@ import java.util.Map;
  */
 public final class SkillFrontmatterParser {
 
-    public record ParseResult(Map<String, Object> frontmatter, String body, List<String> warnings) {
-    }
-
     private SkillFrontmatterParser() {
     }
 
@@ -188,5 +185,8 @@ public final class SkillFrontmatterParser {
         int i = 0;
         while (i < s.length() && s.charAt(i) == ' ') i++;
         return i;
+    }
+
+    public record ParseResult(Map<String, Object> frontmatter, String body, List<String> warnings) {
     }
 }

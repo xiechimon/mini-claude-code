@@ -36,6 +36,95 @@ public class IlinkClient {
         this.http = http;
     }
 
+    private static java.util.Map<String, String> commonHeaders(String token) {
+        java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("AuthorizationType", "ilink_bot_token");
+        headers.put("X-WECHAT-UIN", randomUin());
+        if (token != null && !token.isBlank()) {
+            headers.put("Authorization", "Bearer " + token);
+        }
+        return headers;
+    }
+
+    private static String randomUin() {
+        byte[] bytes = new byte[4];
+        RANDOM.nextBytes(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private static String url(String baseUrl, String endpoint) {
+        String base = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl;
+        return base.replaceAll("/+$", "") + "/" + endpoint.replaceAll("^/+", "");
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static List<WechatMessage> parseMessages(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<WechatMessage> messages = new ArrayList<>();
+        for (JsonNode msg : node) {
+            String from = msg.path("from_user_id").asText("");
+            String context = msg.path("context_token").asText("");
+            String id = msg.path("message_id").asText(msg.path("seq").asText(""));
+            StringBuilder text = new StringBuilder();
+            List<WechatMediaItem> media = new ArrayList<>();
+            JsonNode items = msg.path("item_list");
+            if (items.isArray()) {
+                for (JsonNode item : items) {
+                    String type = normalizeType(item.path("type").asText(""));
+                    if (item.has("text_item")) {
+                        appendText(text, item.path("text_item").path("text").asText(""));
+                    } else if (item.has("voice_item")) {
+                        appendText(text, item.path("voice_item").path("text").asText(""));
+                    } else if (item.has("image_item")) {
+                        media.add(parseMedia("image", item.path("image_item"), null));
+                    } else if (item.has("file_item")) {
+                        JsonNode file = item.path("file_item");
+                        media.add(parseMedia("file", file, file.path("file_name").asText("")));
+                        appendText(text, "[用户发送了文件: " + file.path("file_name").asText("unknown") + "]");
+                    } else if ("text".equals(type)) {
+                        appendText(text, item.path("text").asText(""));
+                    }
+                }
+            }
+            messages.add(new WechatMessage(id, from, context, text.toString().trim(), media));
+        }
+        return messages;
+    }
+
+    private static WechatMediaItem parseMedia(String type, JsonNode node, String fileName) {
+        JsonNode media = node.path("media");
+        if (media.isMissingNode() || media.isNull()) {
+            media = node.path("cdn_media");
+        }
+        String aesKey = media.path("aes_key").asText(node.path("aeskey").asText(""));
+        return new WechatMediaItem(
+                type,
+                fileName,
+                node.path("mime_type").asText(""),
+                media.path("encrypt_query_param").asText(""),
+                aesKey);
+    }
+
+    private static String normalizeType(String raw) {
+        return raw == null ? "" : raw.toLowerCase(Locale.ROOT);
+    }
+
+    private static void appendText(StringBuilder sb, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        sb.append(value);
+    }
+
     public WechatQrLogin startQrLogin(String botType) throws IOException {
         String endpoint = "ilink/bot/get_bot_qrcode?bot_type=" + encode(botType == null || botType.isBlank() ? "3" : botType);
         JsonNode node = MAPPER.readTree(post(DEFAULT_BASE_URL, endpoint, "{}", null, Duration.ofSeconds(15)));
@@ -156,94 +245,5 @@ public class IlinkClient {
             }
             return body;
         }
-    }
-
-    private static java.util.Map<String, String> commonHeaders(String token) {
-        java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("AuthorizationType", "ilink_bot_token");
-        headers.put("X-WECHAT-UIN", randomUin());
-        if (token != null && !token.isBlank()) {
-            headers.put("Authorization", "Bearer " + token);
-        }
-        return headers;
-    }
-
-    private static String randomUin() {
-        byte[] bytes = new byte[4];
-        RANDOM.nextBytes(bytes);
-        return Base64.getEncoder().encodeToString(bytes);
-    }
-
-    private static String url(String baseUrl, String endpoint) {
-        String base = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl;
-        return base.replaceAll("/+$", "") + "/" + endpoint.replaceAll("^/+", "");
-    }
-
-    private static String encode(String value) {
-        return java.net.URLEncoder.encode(value == null ? "" : value, java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private static List<WechatMessage> parseMessages(JsonNode node) {
-        if (node == null || !node.isArray()) {
-            return List.of();
-        }
-        List<WechatMessage> messages = new ArrayList<>();
-        for (JsonNode msg : node) {
-            String from = msg.path("from_user_id").asText("");
-            String context = msg.path("context_token").asText("");
-            String id = msg.path("message_id").asText(msg.path("seq").asText(""));
-            StringBuilder text = new StringBuilder();
-            List<WechatMediaItem> media = new ArrayList<>();
-            JsonNode items = msg.path("item_list");
-            if (items.isArray()) {
-                for (JsonNode item : items) {
-                    String type = normalizeType(item.path("type").asText(""));
-                    if (item.has("text_item")) {
-                        appendText(text, item.path("text_item").path("text").asText(""));
-                    } else if (item.has("voice_item")) {
-                        appendText(text, item.path("voice_item").path("text").asText(""));
-                    } else if (item.has("image_item")) {
-                        media.add(parseMedia("image", item.path("image_item"), null));
-                    } else if (item.has("file_item")) {
-                        JsonNode file = item.path("file_item");
-                        media.add(parseMedia("file", file, file.path("file_name").asText("")));
-                        appendText(text, "[用户发送了文件: " + file.path("file_name").asText("unknown") + "]");
-                    } else if ("text".equals(type)) {
-                        appendText(text, item.path("text").asText(""));
-                    }
-                }
-            }
-            messages.add(new WechatMessage(id, from, context, text.toString().trim(), media));
-        }
-        return messages;
-    }
-
-    private static WechatMediaItem parseMedia(String type, JsonNode node, String fileName) {
-        JsonNode media = node.path("media");
-        if (media.isMissingNode() || media.isNull()) {
-            media = node.path("cdn_media");
-        }
-        String aesKey = media.path("aes_key").asText(node.path("aeskey").asText(""));
-        return new WechatMediaItem(
-                type,
-                fileName,
-                node.path("mime_type").asText(""),
-                media.path("encrypt_query_param").asText(""),
-                aesKey);
-    }
-
-    private static String normalizeType(String raw) {
-        return raw == null ? "" : raw.toLowerCase(Locale.ROOT);
-    }
-
-    private static void appendText(StringBuilder sb, String value) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        if (!sb.isEmpty()) {
-            sb.append('\n');
-        }
-        sb.append(value);
     }
 }

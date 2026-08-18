@@ -17,6 +17,17 @@ public class AtMentionExpander {
         this.serverManager = serverManager;
     }
 
+    private static String escapeXml(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("\"", "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
     public String expand(String input) {
         List<AtMentionParser.MentionToken> tokens = AtMentionParser.parse(input);
         if (tokens.isEmpty()) {
@@ -57,16 +68,5 @@ public class AtMentionExpander {
                     "\" uri=\"" + escapeXml(token.uri()) + "\">" +
                     escapeXml(e.getMessage()) + "</resource_error>";
         }
-    }
-
-    private static String escapeXml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("&", "&amp;")
-                .replace("\"", "&quot;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;");
     }
 }

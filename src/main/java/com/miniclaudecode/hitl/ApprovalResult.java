@@ -16,15 +16,6 @@ public record ApprovalResult(
         String modifiedArguments,
         String reason
 ) {
-    public enum Decision {
-        APPROVED,
-        APPROVED_ALL,
-        APPROVED_ALL_BY_SERVER,
-        REJECTED,
-        MODIFIED,
-        SKIPPED
-    }
-
     public static ApprovalResult approve() {
         return new ApprovalResult(Decision.APPROVED, null, null);
     }
@@ -83,5 +74,14 @@ public record ApprovalResult(
             return modifiedArguments;
         }
         return originalArguments;
+    }
+
+    public enum Decision {
+        APPROVED,
+        APPROVED_ALL,
+        APPROVED_ALL_BY_SERVER,
+        REJECTED,
+        MODIFIED,
+        SKIPPED
     }
 }

@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VectorStoreTest {
 
-    private VectorStore store;
     private static final String TEST_PROJECT = "/tmp/test-project";
+    private VectorStore store;
 
     @BeforeEach
     void setUp() throws Exception {

@@ -33,6 +33,20 @@ public final class SkillRegistry {
         this.stateStore = stateStore;
     }
 
+    private static String stringField(Map<String, Object> fm, String key) {
+        Object v = fm.get(key);
+        return v instanceof String s ? s : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> listField(Map<String, Object> fm, String key) {
+        Object v = fm.get(key);
+        if (v instanceof List<?> list) {
+            return list.stream().filter(x -> x instanceof String).map(x -> (String) x).toList();
+        }
+        return Collections.emptyList();
+    }
+
     public synchronized void reload() {
         skillsByName.clear();
         warnings.clear();
@@ -145,19 +159,5 @@ public final class SkillRegistry {
                 skillMd,
                 referencesDir
         );
-    }
-
-    private static String stringField(Map<String, Object> fm, String key) {
-        Object v = fm.get(key);
-        return v instanceof String s ? s : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> listField(Map<String, Object> fm, String key) {
-        Object v = fm.get(key);
-        if (v instanceof List<?> list) {
-            return list.stream().filter(x -> x instanceof String).map(x -> (String) x).toList();
-        }
-        return Collections.emptyList();
     }
 }

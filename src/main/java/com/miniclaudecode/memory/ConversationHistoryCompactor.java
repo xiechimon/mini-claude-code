@@ -46,9 +46,8 @@ public class ConversationHistoryCompactor {
             %s
             === 待压缩的对话（结束）===
             """;
-
-    private LlmClient llmClient;
     private final int retainRecentRounds;
+    private LlmClient llmClient;
 
     public ConversationHistoryCompactor(LlmClient llmClient) {
         this(llmClient, DEFAULT_RETAIN_RECENT_ROUNDS);

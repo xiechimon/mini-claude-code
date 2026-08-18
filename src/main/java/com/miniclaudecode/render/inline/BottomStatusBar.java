@@ -78,95 +78,6 @@ public final class BottomStatusBar implements AutoCloseable {
         this.out = out;
     }
 
-    /**
-     * 可重复调用，状态栏只初始化一次
-     */
-    public synchronized void start() {
-        if (started || closed) {
-            return;
-        }
-        status = Status.getStatus(terminal);
-        if (status != null) {
-            status.setBorder(true);
-        }
-        started = true;
-        renderDock();
-    }
-
-    public void update(StatusInfo info) {
-        this.current = mergeEnvironment(info, current);
-        renderDock();
-    }
-
-    /**
-     * 当前 StatusInfo 快照，供 thinking 面板等组件复用同一份格式化结果
-     */
-    public StatusInfo currentStatus() {
-        return current;
-    }
-
-    /**
-     * 立即触发一次重绘（不等节流间隔）
-     */
-    public void flushNow() {
-        renderDock();
-    }
-
-    /**
-     * 在即将读取输入时刷新 JLine dock；光标和输入行位置由 LineReader 管理
-     */
-    public void prepareInputLine() {
-        renderDock();
-        moveCursorToDockInputRow();
-    }
-
-    /**
-     * 输入提交后保留底部 dock；正文继续在 JLine 保留区上方滚动
-     */
-    public void finishInputLine() {
-        renderDock();
-    }
-
-    private void renderDock() {
-        StatusInfo info = current;
-        Status dock = status;
-        if (info == null || dock == null || closed || !started) {
-            return;
-        }
-        int cols = TerminalCapabilities.safeSize(terminal).getColumns();
-        synchronized (out) {
-            dock.update(formatStatusLines(info, cols));
-        }
-    }
-
-    private void moveCursorToDockInputRow() {
-        StatusInfo info = current;
-        if (info == null || closed || !started) {
-            return;
-        }
-        int rows = TerminalCapabilities.safeSize(terminal).getRows();
-        int cols = TerminalCapabilities.safeSize(terminal).getColumns();
-        int dockRows = formatStatusLines(info, cols).size() + 1; // JLine Status border.
-        int inputRow = inputDockRow(rows, dockRows);
-        synchronized (out) {
-            terminal.puts(InfoCmp.Capability.cursor_address, inputRow, 0);
-            terminal.flush();
-        }
-    }
-
-    @Override
-    public synchronized void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        Status dock = status;
-        status = null;
-        if (dock != null) {
-            dock.close();
-        }
-    }
-
     static String formatStatusLine(StatusInfo info, int cols) {
         String mode = info.hitlEnabled() ? "HITL Ctrl+Y for YOLO" : "YOLO Ctrl+Y to enable HITL";
         String right = environmentSummary(info);
@@ -414,9 +325,6 @@ public final class BottomStatusBar implements AutoCloseable {
         return new ContextGauge(total, window, percent, filled, empty);
     }
 
-    private record ContextGauge(long total, long window, int percent, int filled, int empty) {
-    }
-
     private static String compactCwd() {
         String cwd = System.getProperty("user.dir");
         if (cwd == null || cwd.isBlank()) {
@@ -449,5 +357,97 @@ public final class BottomStatusBar implements AutoCloseable {
             return ms + "ms";
         }
         return String.format("%.1fs", ms / 1000.0);
+    }
+
+    /**
+     * 可重复调用，状态栏只初始化一次
+     */
+    public synchronized void start() {
+        if (started || closed) {
+            return;
+        }
+        status = Status.getStatus(terminal);
+        if (status != null) {
+            status.setBorder(true);
+        }
+        started = true;
+        renderDock();
+    }
+
+    public void update(StatusInfo info) {
+        this.current = mergeEnvironment(info, current);
+        renderDock();
+    }
+
+    /**
+     * 当前 StatusInfo 快照，供 thinking 面板等组件复用同一份格式化结果
+     */
+    public StatusInfo currentStatus() {
+        return current;
+    }
+
+    /**
+     * 立即触发一次重绘（不等节流间隔）
+     */
+    public void flushNow() {
+        renderDock();
+    }
+
+    /**
+     * 在即将读取输入时刷新 JLine dock；光标和输入行位置由 LineReader 管理
+     */
+    public void prepareInputLine() {
+        renderDock();
+        moveCursorToDockInputRow();
+    }
+
+    /**
+     * 输入提交后保留底部 dock；正文继续在 JLine 保留区上方滚动
+     */
+    public void finishInputLine() {
+        renderDock();
+    }
+
+    private void renderDock() {
+        StatusInfo info = current;
+        Status dock = status;
+        if (info == null || dock == null || closed || !started) {
+            return;
+        }
+        int cols = TerminalCapabilities.safeSize(terminal).getColumns();
+        synchronized (out) {
+            dock.update(formatStatusLines(info, cols));
+        }
+    }
+
+    private void moveCursorToDockInputRow() {
+        StatusInfo info = current;
+        if (info == null || closed || !started) {
+            return;
+        }
+        int rows = TerminalCapabilities.safeSize(terminal).getRows();
+        int cols = TerminalCapabilities.safeSize(terminal).getColumns();
+        int dockRows = formatStatusLines(info, cols).size() + 1; // JLine Status border.
+        int inputRow = inputDockRow(rows, dockRows);
+        synchronized (out) {
+            terminal.puts(InfoCmp.Capability.cursor_address, inputRow, 0);
+            terminal.flush();
+        }
+    }
+
+    @Override
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        Status dock = status;
+        status = null;
+        if (dock != null) {
+            dock.close();
+        }
+    }
+
+    private record ContextGauge(long total, long window, int percent, int filled, int empty) {
     }
 }

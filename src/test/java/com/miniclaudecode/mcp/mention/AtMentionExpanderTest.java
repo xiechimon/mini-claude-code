@@ -11,6 +11,16 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AtMentionExpanderTest {
+    private static int count(String value, String needle) {
+        int count = 0;
+        int index = 0;
+        while ((index = value.indexOf(needle, index)) >= 0) {
+            count++;
+            index += needle.length();
+        }
+        return count;
+    }
+
     @Test
     void replacesMentionWithResourceBlock(@TempDir Path tempDir) {
         AtMentionExpander expander = new AtMentionExpander(new FakeManager(tempDir, "hello", "text/plain"));
@@ -46,16 +56,6 @@ class AtMentionExpanderTest {
 
         assertTrue(expanded.contains("<resource_error"));
         assertTrue(expanded.contains("boom"));
-    }
-
-    private static int count(String value, String needle) {
-        int count = 0;
-        int index = 0;
-        while ((index = value.indexOf(needle, index)) >= 0) {
-            count++;
-            index += needle.length();
-        }
-        return count;
     }
 
     private static class FakeManager extends McpServerManager {

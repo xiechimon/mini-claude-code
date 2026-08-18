@@ -29,10 +29,6 @@ public record SnapshotConfig(
         return new SnapshotConfig(enabled, root, Math.max(1, max), excludes);
     }
 
-    public SnapshotConfig withEnabled(boolean enabled) {
-        return new SnapshotConfig(enabled, snapshotsRoot, maxSnapshots, excludes);
-    }
-
     private static boolean readBoolean(String property, String env, boolean fallback) {
         String value = readNullable(property, env);
         if (value == null || value.isBlank()) {
@@ -81,5 +77,9 @@ public record SnapshotConfig(
             }
         }
         return new ArrayList<>(merged);
+    }
+
+    public SnapshotConfig withEnabled(boolean enabled) {
+        return new SnapshotConfig(enabled, snapshotsRoot, maxSnapshots, excludes);
     }
 }

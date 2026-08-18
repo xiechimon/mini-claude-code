@@ -14,6 +14,39 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RuntimeApiServerTest {
 
+    private static HttpRequest.Builder request(String url, String method, String body) {
+        HttpRequest.BodyPublisher publisher = body == null || body.isEmpty()
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(body);
+        return HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
+                .header("Authorization", "Bearer secret")
+                .header("Content-Type", "application/json")
+                .method(method, publisher);
+    }
+
+    private static String waitForEvents(HttpClient client, String base, String threadId) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            HttpResponse<String> response = client.send(request(base + "/v1/threads/" + threadId + "/events", "GET", "")
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            if (response.body().contains("turn.completed")) {
+                return response.body();
+            }
+            Thread.sleep(30);
+        }
+        fail("events did not complete");
+        return "";
+    }
+
+    private static String extract(String body, String prefix) {
+        int start = body.indexOf(prefix);
+        assertTrue(start >= 0, body);
+        int end = body.indexOf('"', start);
+        return body.substring(start, end);
+    }
+
     @Test
     void exposesThreadTurnAndSseEvents(@TempDir Path tempDir) throws Exception {
         try (RuntimeThreadStore store = new RuntimeThreadStore(tempDir.resolve("runtime.db"));
@@ -75,38 +108,5 @@ class RuntimeApiServerTest {
 
             assertEquals(200, response.statusCode());
         }
-    }
-
-    private static HttpRequest.Builder request(String url, String method, String body) {
-        HttpRequest.BodyPublisher publisher = body == null || body.isEmpty()
-                ? HttpRequest.BodyPublishers.noBody()
-                : HttpRequest.BodyPublishers.ofString(body);
-        return HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(3))
-                .header("Authorization", "Bearer secret")
-                .header("Content-Type", "application/json")
-                .method(method, publisher);
-    }
-
-    private static String waitForEvents(HttpClient client, String base, String threadId) throws Exception {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (System.nanoTime() < deadline) {
-            HttpResponse<String> response = client.send(request(base + "/v1/threads/" + threadId + "/events", "GET", "")
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.body().contains("turn.completed")) {
-                return response.body();
-            }
-            Thread.sleep(30);
-        }
-        fail("events did not complete");
-        return "";
-    }
-
-    private static String extract(String body, String prefix) {
-        int start = body.indexOf(prefix);
-        assertTrue(start >= 0, body);
-        int end = body.indexOf('"', start);
-        return body.substring(start, end);
     }
 }

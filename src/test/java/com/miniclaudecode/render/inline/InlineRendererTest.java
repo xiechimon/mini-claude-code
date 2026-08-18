@@ -24,6 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class InlineRendererTest {
 
+    private static LlmClient.ToolCall tc(String name, String args) {
+        return new LlmClient.ToolCall(name + "-id", new LlmClient.ToolCall.Function(name, args));
+    }
+
     @Test
     void onAnsiTerminalEnablesStatusBar() {
         Terminal terminal = Mockito.mock(Terminal.class);
@@ -318,10 +322,6 @@ class InlineRendererTest {
         } finally {
             renderer.close();
         }
-    }
-
-    private static LlmClient.ToolCall tc(String name, String args) {
-        return new LlmClient.ToolCall(name + "-id", new LlmClient.ToolCall.Function(name, args));
     }
 
     @Test

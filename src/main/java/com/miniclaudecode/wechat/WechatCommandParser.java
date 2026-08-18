@@ -6,27 +6,6 @@ import java.util.Locale;
  * 微信通道允许的本地控制命令解析器
  */
 public final class WechatCommandParser {
-    public enum Type {
-        NONE,
-        UNKNOWN,
-        HELP,
-        CLEAR,
-        COMPACT,
-        MODEL,
-        CWD,
-        STATUS,
-        SEND,
-        PAUSE,
-        RESUME,
-        STOP
-    }
-
-    public record Command(Type type, String payload, boolean bypassQueue) {
-        public static Command none() {
-            return new Command(Type.NONE, "", false);
-        }
-    }
-
     private WechatCommandParser() {
     }
 
@@ -54,5 +33,26 @@ public final class WechatCommandParser {
             case "stop", "cancel" -> new Command(Type.STOP, payload, true);
             default -> new Command(Type.UNKNOWN, trimmed, true);
         };
+    }
+
+    public enum Type {
+        NONE,
+        UNKNOWN,
+        HELP,
+        CLEAR,
+        COMPACT,
+        MODEL,
+        CWD,
+        STATUS,
+        SEND,
+        PAUSE,
+        RESUME,
+        STOP
+    }
+
+    public record Command(Type type, String payload, boolean bypassQueue) {
+        public static Command none() {
+            return new Command(Type.NONE, "", false);
+        }
     }
 }

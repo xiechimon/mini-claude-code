@@ -14,12 +14,12 @@ public final class SwitchableHitlHandler implements HitlHandler {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
-    public void setDelegate(HitlHandler delegate) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
-    }
-
     public HitlHandler getDelegate() {
         return delegate;
+    }
+
+    public void setDelegate(HitlHandler delegate) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
     @Override

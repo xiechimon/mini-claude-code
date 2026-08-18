@@ -43,17 +43,6 @@ public class FileTreePane extends Panel {
                 LinearLayout.createLayoutData(LinearLayout.Alignment.Fill, LinearLayout.GrowPolicy.CanGrow)));
     }
 
-    private void loadFiles(Path root) {
-        fileList.clearItems();
-        try (Stream<Path> stream = Files.list(root)) {
-            stream.filter(path -> !matchesIgnore(path.getFileName().toString(), ignorePatterns))
-                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                    .forEach(path -> fileList.addItem(path.getFileName().toString()));
-        } catch (IOException e) {
-            System.err.println("⚠️ 列出目录失败: " + root + " - " + e.getMessage());
-        }
-    }
-
     private static List<String> loadIgnorePatterns(MiniClaudeCodeConfig config) {
         List<String> patterns = new ArrayList<>(DEFAULT_IGNORE);
 
@@ -72,12 +61,6 @@ public class FileTreePane extends Panel {
         return patterns;
     }
 
-    public void refresh() {
-        if (!projectRoots.isEmpty()) {
-            loadFiles(projectRoots.get(0));
-        }
-    }
-
     private static boolean matchesIgnore(String name, List<String> patterns) {
         for (String pattern : patterns) {
             if (pattern.contains("*")) {
@@ -92,5 +75,22 @@ public class FileTreePane extends Panel {
             }
         }
         return false;
+    }
+
+    private void loadFiles(Path root) {
+        fileList.clearItems();
+        try (Stream<Path> stream = Files.list(root)) {
+            stream.filter(path -> !matchesIgnore(path.getFileName().toString(), ignorePatterns))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .forEach(path -> fileList.addItem(path.getFileName().toString()));
+        } catch (IOException e) {
+            System.err.println("⚠️ 列出目录失败: " + root + " - " + e.getMessage());
+        }
+    }
+
+    public void refresh() {
+        if (!projectRoots.isEmpty()) {
+            loadFiles(projectRoots.get(0));
+        }
     }
 }

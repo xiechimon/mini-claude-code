@@ -17,6 +17,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InlineActivityDisplayTest {
 
+    private static Terminal mockAnsiTerminal(ByteArrayOutputStream sink) {
+        Terminal terminal = Mockito.mock(Terminal.class);
+        Mockito.when(terminal.getType()).thenReturn("xterm-256color");
+        Mockito.when(terminal.getSize()).thenReturn(new Size(120, 40));
+        Mockito.when(terminal.getWidth()).thenReturn(120);
+        Mockito.when(terminal.getHeight()).thenReturn(40);
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(sink, StandardCharsets.UTF_8), true);
+        Mockito.when(terminal.writer()).thenReturn(writer);
+        Mockito.when(terminal.encoding()).thenReturn(StandardCharsets.UTF_8);
+        return terminal;
+    }
+
     @Test
     void thinkingPanelKeepsStatusOutOfLiveArea() throws Exception {
         ByteArrayOutputStream terminalSink = new ByteArrayOutputStream();
@@ -81,17 +93,5 @@ class InlineActivityDisplayTest {
         String output = terminalSink.toString(StandardCharsets.UTF_8);
         assertFalse(output.contains("Mini Claude Code"),
                 "idle activity display must not paint when status updates: " + output);
-    }
-
-    private static Terminal mockAnsiTerminal(ByteArrayOutputStream sink) {
-        Terminal terminal = Mockito.mock(Terminal.class);
-        Mockito.when(terminal.getType()).thenReturn("xterm-256color");
-        Mockito.when(terminal.getSize()).thenReturn(new Size(120, 40));
-        Mockito.when(terminal.getWidth()).thenReturn(120);
-        Mockito.when(terminal.getHeight()).thenReturn(40);
-        PrintWriter writer = new PrintWriter(new OutputStreamWriter(sink, StandardCharsets.UTF_8), true);
-        Mockito.when(terminal.writer()).thenReturn(writer);
-        Mockito.when(terminal.encoding()).thenReturn(StandardCharsets.UTF_8);
-        return terminal;
     }
 }

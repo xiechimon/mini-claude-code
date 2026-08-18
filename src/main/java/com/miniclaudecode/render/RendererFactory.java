@@ -22,10 +22,6 @@ import org.jline.terminal.Terminal;
  */
 public final class RendererFactory {
 
-    public enum Mode {
-        INLINE, LANTERNA, PLAIN
-    }
-
     private RendererFactory() {
     }
 
@@ -76,5 +72,9 @@ public final class RendererFactory {
             }
             case LANTERNA -> new PlainRenderer();
         };
+    }
+
+    public enum Mode {
+        INLINE, LANTERNA, PLAIN
     }
 }

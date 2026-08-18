@@ -13,10 +13,6 @@ public enum TaskStatus {
         this.value = value;
     }
 
-    public String value() {
-        return value;
-    }
-
     public static TaskStatus from(String value) {
         if (value == null) {
             return ENQUEUED;
@@ -27,5 +23,9 @@ public enum TaskStatus {
             }
         }
         return ENQUEUED;
+    }
+
+    public String value() {
+        return value;
     }
 }

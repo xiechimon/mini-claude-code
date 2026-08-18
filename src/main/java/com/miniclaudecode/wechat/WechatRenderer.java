@@ -31,6 +31,40 @@ public class WechatRenderer implements Renderer {
         this.stream = new PrintStream(new WechatOutputStream(), true, StandardCharsets.UTF_8);
     }
 
+    static String filterMarkdown(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        return WechatTextFormatter.format(text);
+    }
+
+    static String stripAnsi(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        return ANSI_PATTERN.matcher(text).replaceAll("");
+    }
+
+    private static List<String> split(String text) {
+        java.util.ArrayList<String> chunks = new java.util.ArrayList<>();
+        String remaining = text;
+        while (remaining.length() > MAX_CHARS) {
+            int split = remaining.lastIndexOf('\n', MAX_CHARS);
+            if (split < MAX_CHARS / 3) {
+                split = remaining.lastIndexOf(' ', MAX_CHARS);
+            }
+            if (split < MAX_CHARS / 3) {
+                split = MAX_CHARS;
+            }
+            chunks.add(remaining.substring(0, split).trim());
+            remaining = remaining.substring(split).trim();
+        }
+        if (!remaining.isBlank()) {
+            chunks.add(remaining);
+        }
+        return chunks;
+    }
+
     @Override
     public void start() {
     }
@@ -106,40 +140,6 @@ public class WechatRenderer implements Renderer {
                 throw new IllegalStateException("微信消息发送失败: " + e.getMessage(), e);
             }
         }
-    }
-
-    static String filterMarkdown(String text) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
-        return WechatTextFormatter.format(text);
-    }
-
-    static String stripAnsi(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-        return ANSI_PATTERN.matcher(text).replaceAll("");
-    }
-
-    private static List<String> split(String text) {
-        java.util.ArrayList<String> chunks = new java.util.ArrayList<>();
-        String remaining = text;
-        while (remaining.length() > MAX_CHARS) {
-            int split = remaining.lastIndexOf('\n', MAX_CHARS);
-            if (split < MAX_CHARS / 3) {
-                split = remaining.lastIndexOf(' ', MAX_CHARS);
-            }
-            if (split < MAX_CHARS / 3) {
-                split = MAX_CHARS;
-            }
-            chunks.add(remaining.substring(0, split).trim());
-            remaining = remaining.substring(split).trim();
-        }
-        if (!remaining.isBlank()) {
-            chunks.add(remaining);
-        }
-        return chunks;
     }
 
     private final class WechatOutputStream extends OutputStream {

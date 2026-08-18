@@ -21,48 +21,6 @@ public class PromptAssembler {
         return new PromptAssembler(PromptRepository.createDefault());
     }
 
-    public String assemble(PromptMode mode, PromptContext context) {
-        Objects.requireNonNull(mode, "mode");
-        PromptContext ctx = context == null ? PromptContext.empty() : context;
-
-        String base = repository.loadRequired("base.md");
-        if (!ctx.toolsEnabled()) {
-            base = stripToolSections(base);
-        }
-        validateLanguageSection(base, "base.md");
-
-        StringBuilder prompt = new StringBuilder();
-        append(prompt, base);
-        if (!ctx.toolsEnabled()) {
-            append(prompt, noToolsSection());
-        }
-        append(prompt, repository.loadRequired("personalities/calm.md"));
-        append(prompt, applyVariables(repository.loadRequired(mode.resourcePath()), ctx));
-        append(prompt, repository.loadRequired("approvals/" + approvalMode(ctx) + ".md"));
-        append(prompt, runtimeContext());
-        append(prompt, dynamicSection("Project Context", ctx.projectMemoryContext(), ctx.memoryContext(),
-                ctx.externalContext()));
-        append(prompt, dynamicSection("Skills", ctx.skillIndex()));
-        append(prompt, repository.loadRequired("context/context-management.md"));
-        append(prompt, repository.loadRequired("handoff.md"));
-
-        String assembled = prompt.toString().trim();
-        validateLanguageSection(assembled, "assembled prompt");
-        return assembled;
-    }
-
-    private String approvalMode(PromptContext context) {
-        String mode = context.approvalMode();
-        if (mode == null || mode.isBlank()) {
-            return "suggest";
-        }
-        String normalized = mode.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "auto", "never" -> normalized;
-            default -> "suggest";
-        };
-    }
-
     private static String runtimeContext() {
         ZoneId zone = ZoneId.systemDefault();
         return "## Runtime Context\n\n"
@@ -125,5 +83,47 @@ public class PromptAssembler {
         if (prompt == null || !prompt.contains("## Language")) {
             throw new IllegalStateException("Prompt " + source + " must contain a '## Language' section");
         }
+    }
+
+    public String assemble(PromptMode mode, PromptContext context) {
+        Objects.requireNonNull(mode, "mode");
+        PromptContext ctx = context == null ? PromptContext.empty() : context;
+
+        String base = repository.loadRequired("base.md");
+        if (!ctx.toolsEnabled()) {
+            base = stripToolSections(base);
+        }
+        validateLanguageSection(base, "base.md");
+
+        StringBuilder prompt = new StringBuilder();
+        append(prompt, base);
+        if (!ctx.toolsEnabled()) {
+            append(prompt, noToolsSection());
+        }
+        append(prompt, repository.loadRequired("personalities/calm.md"));
+        append(prompt, applyVariables(repository.loadRequired(mode.resourcePath()), ctx));
+        append(prompt, repository.loadRequired("approvals/" + approvalMode(ctx) + ".md"));
+        append(prompt, runtimeContext());
+        append(prompt, dynamicSection("Project Context", ctx.projectMemoryContext(), ctx.memoryContext(),
+                ctx.externalContext()));
+        append(prompt, dynamicSection("Skills", ctx.skillIndex()));
+        append(prompt, repository.loadRequired("context/context-management.md"));
+        append(prompt, repository.loadRequired("handoff.md"));
+
+        String assembled = prompt.toString().trim();
+        validateLanguageSection(assembled, "assembled prompt");
+        return assembled;
+    }
+
+    private String approvalMode(PromptContext context) {
+        String mode = context.approvalMode();
+        if (mode == null || mode.isBlank()) {
+            return "suggest";
+        }
+        String normalized = mode.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "auto", "never" -> normalized;
+            default -> "suggest";
+        };
     }
 }

@@ -17,6 +17,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class InlineApprovalPrompterTest {
 
+    private static Terminal mockTerminalReturning(char ch) throws Exception {
+        Terminal terminal = Mockito.mock(Terminal.class);
+        Mockito.when(terminal.enterRawMode()).thenReturn(null);
+        NonBlockingReader reader = Mockito.mock(NonBlockingReader.class);
+        Mockito.when(reader.read()).thenReturn((int) ch);
+        Mockito.when(terminal.reader()).thenReturn(reader);
+        return terminal;
+    }
+
     @Test
     void singleCharYReturnsApprove() throws Exception {
         Terminal terminal = mockTerminalReturning('y');
@@ -103,14 +112,5 @@ class InlineApprovalPrompterTest {
         ApprovalResult result = p.prompt(ApprovalRequest.of("write_file", "{}", "test"));
         assertNotNull(result);
         assertEquals(ApprovalResult.Decision.REJECTED, result.decision());
-    }
-
-    private static Terminal mockTerminalReturning(char ch) throws Exception {
-        Terminal terminal = Mockito.mock(Terminal.class);
-        Mockito.when(terminal.enterRawMode()).thenReturn(null);
-        NonBlockingReader reader = Mockito.mock(NonBlockingReader.class);
-        Mockito.when(reader.read()).thenReturn((int) ch);
-        Mockito.when(terminal.reader()).thenReturn(reader);
-        return terminal;
     }
 }

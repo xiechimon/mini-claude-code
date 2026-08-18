@@ -34,6 +34,17 @@ public class PromptRepository {
         return new PromptRepository(home, project);
     }
 
+    private static String normalize(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            throw new IllegalArgumentException("relativePath is blank");
+        }
+        String normalized = relativePath.replace('\\', '/');
+        if (normalized.startsWith("/") || normalized.contains("..")) {
+            throw new IllegalArgumentException("Invalid prompt path: " + relativePath);
+        }
+        return normalized;
+    }
+
     public String loadRequired(String relativePath) {
         String normalized = normalize(relativePath);
         String content = loadBuiltin(normalized);
@@ -69,16 +80,5 @@ public class PromptRepository {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to read prompt override: " + override, e);
         }
-    }
-
-    private static String normalize(String relativePath) {
-        if (relativePath == null || relativePath.isBlank()) {
-            throw new IllegalArgumentException("relativePath is blank");
-        }
-        String normalized = relativePath.replace('\\', '/');
-        if (normalized.startsWith("/") || normalized.contains("..")) {
-            throw new IllegalArgumentException("Invalid prompt path: " + relativePath);
-        }
-        return normalized;
     }
 }

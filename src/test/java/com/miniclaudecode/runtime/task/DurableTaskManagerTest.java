@@ -10,6 +10,41 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DurableTaskManagerTest {
 
+    private static DurableTask waitForTerminal(DurableTaskManager manager, String id) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            DurableTask task = manager.find(id).orElseThrow();
+            if (task.terminal()) {
+                return task;
+            }
+            Thread.sleep(20);
+        }
+        fail("task did not finish in time");
+        return null;
+    }
+
+    private static void waitUntilStatus(DurableTaskManager manager, String id, TaskStatus status) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (manager.find(id).orElseThrow().status() == status) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        fail("task did not reach status " + status);
+    }
+
+    private static void markRunning(DurableTaskManager manager, String id) throws Exception {
+        var field = DurableTaskManager.class.getDeclaredField("connection");
+        field.setAccessible(true);
+        java.sql.Connection connection = (java.sql.Connection) field.get(manager);
+        try (java.sql.PreparedStatement ps = connection.prepareStatement(
+                "UPDATE runtime_tasks SET status = 'running' WHERE id = ?")) {
+            ps.setString(1, id);
+            ps.executeUpdate();
+        }
+    }
+
     @Test
     void runsEnqueuedTaskAndPersistsResult(@TempDir Path tempDir) throws Exception {
         try (DurableTaskManager manager = new DurableTaskManager(
@@ -57,41 +92,6 @@ class DurableTaskManagerTest {
             DurableTask canceled = waitForTerminal(manager, task.id());
 
             assertEquals(TaskStatus.CANCELED, canceled.status());
-        }
-    }
-
-    private static DurableTask waitForTerminal(DurableTaskManager manager, String id) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (System.nanoTime() < deadline) {
-            DurableTask task = manager.find(id).orElseThrow();
-            if (task.terminal()) {
-                return task;
-            }
-            Thread.sleep(20);
-        }
-        fail("task did not finish in time");
-        return null;
-    }
-
-    private static void waitUntilStatus(DurableTaskManager manager, String id, TaskStatus status) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (System.nanoTime() < deadline) {
-            if (manager.find(id).orElseThrow().status() == status) {
-                return;
-            }
-            Thread.sleep(20);
-        }
-        fail("task did not reach status " + status);
-    }
-
-    private static void markRunning(DurableTaskManager manager, String id) throws Exception {
-        var field = DurableTaskManager.class.getDeclaredField("connection");
-        field.setAccessible(true);
-        java.sql.Connection connection = (java.sql.Connection) field.get(manager);
-        try (java.sql.PreparedStatement ps = connection.prepareStatement(
-                "UPDATE runtime_tasks SET status = 'running' WHERE id = ?")) {
-            ps.setString(1, id);
-            ps.executeUpdate();
         }
     }
 }

@@ -15,6 +15,18 @@ class CodeSearchGoldenSetTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int MAX_CHARS = 6_000;
 
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static void restoreSystemProperty(String key, String previous) {
+        if (previous == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, previous);
+        }
+    }
+
     @Test
     void grepThenReadGoldenSetStaysWithinBudgetAndFindsExpectedCode() throws Exception {
         Path projectRoot = Path.of("").toAbsolutePath().normalize();
@@ -72,18 +84,6 @@ class CodeSearchGoldenSetTest {
             }
         }
         throw new AssertionError("Expected text not found in " + file + ": " + text);
-    }
-
-    private static String jsonEscape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-
-    private static void restoreSystemProperty(String key, String previous) {
-        if (previous == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, previous);
-        }
     }
 
     private record GoldenCase(

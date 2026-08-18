@@ -35,6 +35,19 @@ public record SkillBuiltinExtractor(Path cacheRoot) {
             ))
     );
 
+    private static void deleteRecursive(Path dir) throws IOException {
+        if (!Files.exists(dir)) return;
+        try (var stream = Files.walk(dir)) {
+            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException ignored) {
+                        }
+                    });
+        }
+    }
+
     public List<String> builtinSkillNames() {
         return BUILTIN_SKILLS.stream().map(BuiltinSkillSpec::name).toList();
     }
@@ -76,19 +89,6 @@ public record SkillBuiltinExtractor(Path cacheRoot) {
             }
         }
         Files.writeString(versionFile, CURRENT_VERSION);
-    }
-
-    private static void deleteRecursive(Path dir) throws IOException {
-        if (!Files.exists(dir)) return;
-        try (var stream = Files.walk(dir)) {
-            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount())
-                    .forEach(p -> {
-                        try {
-                            Files.deleteIfExists(p);
-                        } catch (IOException ignored) {
-                        }
-                    });
-        }
     }
 
     private record BuiltinSkillSpec(String name, List<String> files) {

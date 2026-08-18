@@ -21,10 +21,10 @@ public class WechatMessageLoop {
     private final IlinkClient client;
     private final WechatAccountStore store;
     private final Renderer localRenderer;
-    private WechatAccount account;
-    private WechatAgentSession session;
     private final Queue<WechatMessage> queue = new ArrayDeque<>();
     private final Set<String> seenMessageIds = new HashSet<>();
+    private WechatAccount account;
+    private WechatAgentSession session;
     private boolean paused;
     private boolean stopped;
     private volatile String activeContextToken = "";
@@ -39,6 +39,40 @@ public class WechatMessageLoop {
         this.store = store == null ? WechatAccountStore.createDefault() : store;
         this.account = account;
         this.localRenderer = localRenderer == null ? new PlainRenderer() : localRenderer;
+    }
+
+    private static String safeContextToken(String contextToken) {
+        return contextToken == null ? "" : contextToken;
+    }
+
+    private static String helpText() {
+        return """
+                Mini Claude Code 微信通道命令：
+                /help      查看帮助
+                /status    查看状态
+                /clear     清空当前微信会话
+                /compact   压缩当前上下文
+                /pause     暂停普通消息消费
+                /resume    恢复消息消费
+                /stop      取消当前任务
+                
+                安全策略：微信通道使用非交互式默认拒绝策略；execute_command 和 MCP 默认拒绝，写文件受 workspace PathGuard 限制。
+                """.trim();
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String mask(String id) {
+        if (id == null || id.length() < 8) {
+            return "***";
+        }
+        return id.substring(0, 4) + "***" + id.substring(id.length() - 4);
     }
 
     public void run() {
@@ -266,10 +300,6 @@ public class WechatMessageLoop {
         }
     }
 
-    private static String safeContextToken(String contextToken) {
-        return contextToken == null ? "" : contextToken;
-    }
-
     private void renderIncoming(WechatMessage message) {
         if (localRenderer == null || message == null) {
             return;
@@ -283,35 +313,5 @@ public class WechatMessageLoop {
         }
         localRenderer.beginTurn();
         localRenderer.stream().println(AnsiStyle.userMessageBlock("微信 > " + text, localRenderer.terminalColumns()));
-    }
-
-    private static String helpText() {
-        return """
-                Mini Claude Code 微信通道命令：
-                /help      查看帮助
-                /status    查看状态
-                /clear     清空当前微信会话
-                /compact   压缩当前上下文
-                /pause     暂停普通消息消费
-                /resume    恢复消息消费
-                /stop      取消当前任务
-                
-                安全策略：微信通道使用非交互式默认拒绝策略；execute_command 和 MCP 默认拒绝，写文件受 workspace PathGuard 限制。
-                """.trim();
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static String mask(String id) {
-        if (id == null || id.length() < 8) {
-            return "***";
-        }
-        return id.substring(0, 4) + "***" + id.substring(id.length() - 4);
     }
 }

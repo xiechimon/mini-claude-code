@@ -7,6 +7,10 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class McpResourceCacheTest {
+    private static McpResourceDescriptor resource(String server, String uri) {
+        return new McpResourceDescriptor(server, uri, "name", "", "", "text/plain", null);
+    }
+
     @Test
     void returnsCachedResourcesForFreshServer() {
         McpResourceCache cache = new McpResourceCache();
@@ -48,9 +52,5 @@ class McpResourceCacheTest {
 
         assertEquals(1, all.size());
         assertEquals("a", all.get(0).serverName());
-    }
-
-    private static McpResourceDescriptor resource(String server, String uri) {
-        return new McpResourceDescriptor(server, uri, "name", "", "", "text/plain", null);
     }
 }

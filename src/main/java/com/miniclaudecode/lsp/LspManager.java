@@ -28,6 +28,14 @@ public class LspManager {
         setProjectPath(projectPath);
     }
 
+    private static int severityRank(LspSeverity severity) {
+        return switch (severity) {
+            case ERROR -> 0;
+            case WARNING -> 1;
+            case INFO -> 2;
+        };
+    }
+
     public synchronized void setProjectPath(String projectPath) {
         String root = projectPath == null || projectPath.isBlank()
                 ? System.getProperty("user.dir")
@@ -151,13 +159,5 @@ public class LspManager {
             return displayPath.replace('\\', '/');
         }
         return projectRoot.toString().replace('\\', '/');
-    }
-
-    private static int severityRank(LspSeverity severity) {
-        return switch (severity) {
-            case ERROR -> 0;
-            case WARNING -> 1;
-            case INFO -> 2;
-        };
     }
 }

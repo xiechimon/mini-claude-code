@@ -30,6 +30,62 @@ public class WechatTerminalRenderer implements Renderer {
         this.wechatRenderer = new WechatRenderer(sender);
     }
 
+    private static boolean endsAtNaturalBoundary(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        if (hasUnclosedCodeFence(text) || endsInsideMarkdownTable(text)) {
+            return false;
+        }
+        if (text.endsWith("\n\n")) {
+            return true;
+        }
+        String trimmed = text.stripTrailing();
+        if (trimmed.endsWith("\n```")) {
+            return true;
+        }
+        char last = trimmed.charAt(trimmed.length() - 1);
+        return last == '。'
+                || last == '！'
+                || last == '？'
+                || last == '.'
+                || last == '!'
+                || last == '?'
+                || last == '：'
+                || last == ':';
+    }
+
+    private static boolean hasUnclosedCodeFence(String text) {
+        boolean insideFence = false;
+        for (String line : text.split("\n", -1)) {
+            if (line.stripLeading().startsWith("```")) {
+                insideFence = !insideFence;
+            }
+        }
+        return insideFence;
+    }
+
+    private static boolean endsInsideMarkdownTable(String text) {
+        String trimmed = text.stripTrailing();
+        if (trimmed.isEmpty() || text.endsWith("\n\n")) {
+            return false;
+        }
+        int lineStart = trimmed.lastIndexOf('\n') + 1;
+        String lastLine = trimmed.substring(lineStart).trim();
+        return isMarkdownTableLine(lastLine);
+    }
+
+    private static boolean isMarkdownTableLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        String trimmed = line.trim();
+        if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.indexOf('|', 1) > 0) {
+            return true;
+        }
+        return trimmed.matches("^\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?$");
+    }
+
     public synchronized void resetWechatStream() {
         wechatRenderer.flushBuffer();
         sentContent = false;
@@ -185,62 +241,6 @@ public class WechatTerminalRenderer implements Renderer {
         return pending >= MIN_STREAM_FLUSH_CHARS
                 && lastFlushNanos > 0
                 && now - lastFlushNanos >= STREAM_FLUSH_NANOS;
-    }
-
-    private static boolean endsAtNaturalBoundary(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        if (hasUnclosedCodeFence(text) || endsInsideMarkdownTable(text)) {
-            return false;
-        }
-        if (text.endsWith("\n\n")) {
-            return true;
-        }
-        String trimmed = text.stripTrailing();
-        if (trimmed.endsWith("\n```")) {
-            return true;
-        }
-        char last = trimmed.charAt(trimmed.length() - 1);
-        return last == '。'
-                || last == '！'
-                || last == '？'
-                || last == '.'
-                || last == '!'
-                || last == '?'
-                || last == '：'
-                || last == ':';
-    }
-
-    private static boolean hasUnclosedCodeFence(String text) {
-        boolean insideFence = false;
-        for (String line : text.split("\n", -1)) {
-            if (line.stripLeading().startsWith("```")) {
-                insideFence = !insideFence;
-            }
-        }
-        return insideFence;
-    }
-
-    private static boolean endsInsideMarkdownTable(String text) {
-        String trimmed = text.stripTrailing();
-        if (trimmed.isEmpty() || text.endsWith("\n\n")) {
-            return false;
-        }
-        int lineStart = trimmed.lastIndexOf('\n') + 1;
-        String lastLine = trimmed.substring(lineStart).trim();
-        return isMarkdownTableLine(lastLine);
-    }
-
-    private static boolean isMarkdownTableLine(String line) {
-        if (line == null || line.isBlank()) {
-            return false;
-        }
-        String trimmed = line.trim();
-        if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.indexOf('|', 1) > 0) {
-            return true;
-        }
-        return trimmed.matches("^\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?$");
     }
 
     private void flushWechat() {

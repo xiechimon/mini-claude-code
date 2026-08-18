@@ -28,13 +28,17 @@ public record PromptContext(
     }
 
     public static final class Builder {
+        private final Map<String, String> variables = new LinkedHashMap<>();
         private String approvalMode = "suggest";
         private String projectMemoryContext = "";
         private String memoryContext = "";
         private String externalContext = "";
         private String skillIndex = "";
         private boolean toolsEnabled = true;
-        private final Map<String, String> variables = new LinkedHashMap<>();
+
+        private static String normalize(String value) {
+            return value == null ? "" : value.trim();
+        }
 
         public Builder approvalMode(String approvalMode) {
             if (approvalMode != null && !approvalMode.isBlank()) {
@@ -78,10 +82,6 @@ public record PromptContext(
         public PromptContext build() {
             return new PromptContext(approvalMode, projectMemoryContext, memoryContext, externalContext,
                     skillIndex, toolsEnabled, Map.copyOf(variables));
-        }
-
-        private static String normalize(String value) {
-            return value == null ? "" : value.trim();
         }
     }
 }

@@ -27,6 +27,10 @@ public class HitlToolRegistry extends ToolRegistry {
         this.hitlHandler = hitlHandler;
     }
 
+    private static long elapsedMillis(long startNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    }
+
     @Override
     public String executeTool(String name, String argumentsJson) {
         return executeToolOutput(name, argumentsJson).text();
@@ -75,10 +79,6 @@ public class HitlToolRegistry extends ToolRegistry {
         // 批准（含修改参数）- 使用 effectiveArguments 获取最终参数；父类执行路径会负责 allow audit
         String effectiveArgs = result.effectiveArguments(argumentsJson);
         return super.doExecuteTool(name, effectiveArgs);
-    }
-
-    private static long elapsedMillis(long startNanos) {
-        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
     }
 
     public HitlHandler getHitlHandler() {

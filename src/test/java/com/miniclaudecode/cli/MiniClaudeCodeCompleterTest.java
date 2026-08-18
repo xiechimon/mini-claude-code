@@ -14,6 +14,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MiniClaudeCodeCompleterTest {
 
+    private static Skill skill(String name, String description) {
+        return new Skill(name, description, "1.0.0", null, List.of(), Skill.Source.USER, "body", null, null);
+    }
+
+    private static ParsedLine parsed(String line, String word) {
+        return new ParsedLine() {
+            @Override
+            public String word() {
+                return word;
+            }
+
+            @Override
+            public int wordCursor() {
+                return word.length();
+            }
+
+            @Override
+            public int wordIndex() {
+                return 0;
+            }
+
+            @Override
+            public List<String> words() {
+                return List.of(word);
+            }
+
+            @Override
+            public String line() {
+                return line;
+            }
+
+            @Override
+            public int cursor() {
+                return line.length();
+            }
+        };
+    }
+
     @Test
     void suggestsSlashCommandsWhenInputStartsWithSlash() {
         MiniClaudeCodeCompleter completer = new MiniClaudeCodeCompleter(List::of);
@@ -164,43 +202,5 @@ class MiniClaudeCodeCompleterTest {
         completer.complete(null, parsed("@image:pom", "@image:pom"), candidates);
 
         assertTrue(candidates.stream().anyMatch(c -> c.value().equals("@image:pom.xml")));
-    }
-
-    private static Skill skill(String name, String description) {
-        return new Skill(name, description, "1.0.0", null, List.of(), Skill.Source.USER, "body", null, null);
-    }
-
-    private static ParsedLine parsed(String line, String word) {
-        return new ParsedLine() {
-            @Override
-            public String word() {
-                return word;
-            }
-
-            @Override
-            public int wordCursor() {
-                return word.length();
-            }
-
-            @Override
-            public int wordIndex() {
-                return 0;
-            }
-
-            @Override
-            public List<String> words() {
-                return List.of(word);
-            }
-
-            @Override
-            public String line() {
-                return line;
-            }
-
-            @Override
-            public int cursor() {
-                return line.length();
-            }
-        };
     }
 }

@@ -73,6 +73,11 @@ public class ZhipuSearchProvider implements SearchProvider {
         return ALLOWED_ENGINES.contains(trimmed) ? trimmed : DEFAULT_ENGINE;
     }
 
+    private static String truncate(String text, int max) {
+        if (text == null) return "";
+        return text.length() <= max ? text : text.substring(0, max) + "...";
+    }
+
     @Override
     public String name() {
         return "zhipu";
@@ -144,10 +149,5 @@ public class ZhipuSearchProvider implements SearchProvider {
             }
         }
         return results;
-    }
-
-    private static String truncate(String text, int max) {
-        if (text == null) return "";
-        return text.length() <= max ? text : text.substring(0, max) + "...";
     }
 }

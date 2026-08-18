@@ -30,6 +30,19 @@ public class SnapshotService implements AutoCloseable {
         return new SnapshotService(new SideGitManager(projectRoot));
     }
 
+    private static String turnId(String mode) {
+        String safeMode = mode == null || mode.isBlank() ? "turn" : mode.toLowerCase().replaceAll("[^a-z0-9_-]", "-");
+        return safeMode + "-" + Instant.now().toEpochMilli();
+    }
+
+    private static String summarize(String mode, String input) {
+        String normalized = input == null ? "" : input.replaceAll("\\s+", " ").trim();
+        if (normalized.length() > 120) {
+            normalized = normalized.substring(0, 120) + "...";
+        }
+        return "mode=" + (mode == null ? "turn" : mode) + "\ninput=" + normalized;
+    }
+
     public <T> T runTurn(String mode, String input, ThrowingSupplier<T> supplier) throws Exception {
         String turnId = turnId(mode);
         String summary = summarize(mode, input);
@@ -97,19 +110,6 @@ public class SnapshotService implements AutoCloseable {
     @Override
     public void close() {
         executor.shutdownNow();
-    }
-
-    private static String turnId(String mode) {
-        String safeMode = mode == null || mode.isBlank() ? "turn" : mode.toLowerCase().replaceAll("[^a-z0-9_-]", "-");
-        return safeMode + "-" + Instant.now().toEpochMilli();
-    }
-
-    private static String summarize(String mode, String input) {
-        String normalized = input == null ? "" : input.replaceAll("\\s+", " ").trim();
-        if (normalized.length() > 120) {
-            normalized = normalized.substring(0, 120) + "...";
-        }
-        return "mode=" + (mode == null ? "turn" : mode) + "\ninput=" + normalized;
     }
 
     @FunctionalInterface

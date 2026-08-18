@@ -22,6 +22,34 @@ import static org.junit.jupiter.api.Assertions.*;
 class McpToolRegistrationTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static McpToolDescriptor sampleDescriptor() throws Exception {
+        return sampleDescriptor("demo", "echo");
+    }
+
+    private static McpToolDescriptor sampleDescriptor(String server, String name) throws Exception {
+        return new McpToolDescriptor(
+                server,
+                name,
+                "mcp__" + server + "__" + name,
+                "Echo input",
+                MAPPER.readTree("{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}}}")
+        );
+    }
+
+    private static void withAuditDir(Path tempDir, ThrowingRunnable body) throws Exception {
+        String previous = System.getProperty("mini-claude-code.audit.dir");
+        System.setProperty("mini-claude-code.audit.dir", tempDir.resolve("audit").toString());
+        try {
+            body.run();
+        } finally {
+            if (previous == null) {
+                System.clearProperty("mini-claude-code.audit.dir");
+            } else {
+                System.setProperty("mini-claude-code.audit.dir", previous);
+            }
+        }
+    }
+
     @Test
     void registersAndRoutesMcpToolToInvoker(@TempDir Path tempDir) throws Exception {
         withAuditDir(tempDir, () -> {
@@ -105,34 +133,6 @@ class McpToolRegistrationTest {
             assertTrue(registry.hasTool("mcp__other__keep"));
             assertEquals("new:new", registry.executeTool("mcp__demo__new", "{}"));
         });
-    }
-
-    private static McpToolDescriptor sampleDescriptor() throws Exception {
-        return sampleDescriptor("demo", "echo");
-    }
-
-    private static McpToolDescriptor sampleDescriptor(String server, String name) throws Exception {
-        return new McpToolDescriptor(
-                server,
-                name,
-                "mcp__" + server + "__" + name,
-                "Echo input",
-                MAPPER.readTree("{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"}}}")
-        );
-    }
-
-    private static void withAuditDir(Path tempDir, ThrowingRunnable body) throws Exception {
-        String previous = System.getProperty("mini-claude-code.audit.dir");
-        System.setProperty("mini-claude-code.audit.dir", tempDir.resolve("audit").toString());
-        try {
-            body.run();
-        } finally {
-            if (previous == null) {
-                System.clearProperty("mini-claude-code.audit.dir");
-            } else {
-                System.setProperty("mini-claude-code.audit.dir", previous);
-            }
-        }
     }
 
     @FunctionalInterface

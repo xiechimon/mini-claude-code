@@ -38,15 +38,14 @@ public final class InlineRenderer implements Renderer {
     private final InlineActivityDisplay activityDisplay;
     private final List<TranscriptEntry> transcript = new ArrayList<>();
     private final AtomicBoolean startupScreenPrinted = new AtomicBoolean(true);
+    // —— 代码块折叠状态机字段（仅供 createTranscriptStream 内部使用）——
+    private final StringBuilder lineBuffer = new StringBuilder();
+    private final List<String> codeBodyLines = new ArrayList<>();
     private volatile LineReader lineReader;
     private int renderedRows;
     private boolean redrawing;
     private volatile boolean started;
     private volatile boolean closed;
-
-    // —— 代码块折叠状态机字段（仅供 createTranscriptStream 内部使用）——
-    private final StringBuilder lineBuffer = new StringBuilder();
-    private final List<String> codeBodyLines = new ArrayList<>();
     private boolean inCodeBlock;
     private String codeLanguage = "";
     private String codeHeaderLine;
@@ -72,6 +71,92 @@ public final class InlineRenderer implements Renderer {
                 : new InlineActivityDisplay(terminal, out, statusBar);
         this.blockRegistry = new BlockRegistry();
         this.stream = createTranscriptStream(out);
+    }
+
+    private static String joinLines(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        String block = String.join("\n", lines);
+        return block.endsWith("\n") ? block : block + "\n";
+    }
+
+    static String clearAcceptedInputSequence(int rows) {
+        int count = Math.max(1, rows);
+        StringBuilder sb = new StringBuilder();
+        sb.append(AnsiSeq.moveUp(count)).append('\r');
+        for (int i = 0; i < count; i++) {
+            sb.append(AnsiSeq.CLEAR_LINE);
+            if (i < count - 1) {
+                sb.append('\n');
+            }
+        }
+        if (count > 1) {
+            sb.append(AnsiSeq.moveUp(count - 1));
+        }
+        sb.append('\r');
+        return sb.toString();
+    }
+
+    private static int displayWidth(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int width = 0;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            width += isWideCodePoint(cp) ? 2 : 1;
+            i += Character.charCount(cp);
+        }
+        return width;
+    }
+
+    private static boolean isWideCodePoint(int cp) {
+        Character.UnicodeScript script = Character.UnicodeScript.of(cp);
+        return script == Character.UnicodeScript.HAN
+                || script == Character.UnicodeScript.HIRAGANA
+                || script == Character.UnicodeScript.KATAKANA
+                || script == Character.UnicodeScript.HANGUL
+                || (cp >= 0x1F300 && cp <= 0x1FAFF)
+                || (cp >= 0xFF01 && cp <= 0xFF60);
+    }
+
+    private static String stripAnsi(String s) {
+        if (s == null || s.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            if (ch == '' && i + 1 < s.length() && s.charAt(i + 1) == '[') {
+                int j = i + 2;
+                while (j < s.length()) {
+                    char c = s.charAt(j);
+                    if (c >= '@' && c <= '~') {
+                        break;
+                    }
+                    j++;
+                }
+                i = j;
+                continue;
+            }
+            sb.append(ch);
+        }
+        return sb.toString();
+    }
+
+    private static String stripTrailingNewline(String s) {
+        if (s == null || s.isEmpty()) {
+            return s == null ? "" : s;
+        }
+        int end = s.length();
+        if (s.charAt(end - 1) == '\n') {
+            end--;
+        }
+        if (end > 0 && s.charAt(end - 1) == '\r') {
+            end--;
+        }
+        return s.substring(0, end);
     }
 
     @Override
@@ -501,14 +586,6 @@ public final class InlineRenderer implements Renderer {
         out.flush();
     }
 
-    private static String joinLines(List<String> lines) {
-        if (lines == null || lines.isEmpty()) {
-            return "";
-        }
-        String block = String.join("\n", lines);
-        return block.endsWith("\n") ? block : block + "\n";
-    }
-
     private int acceptedInputRows(String input) {
         int cols = Math.max(1, TerminalCapabilities.safeSize(terminal).getColumns());
         String text = input == null ? "" : input;
@@ -519,84 +596,6 @@ public final class InlineRenderer implements Renderer {
             rows += Math.max(1, (cells + cols - 1) / cols);
         }
         return Math.max(1, rows);
-    }
-
-    static String clearAcceptedInputSequence(int rows) {
-        int count = Math.max(1, rows);
-        StringBuilder sb = new StringBuilder();
-        sb.append(AnsiSeq.moveUp(count)).append('\r');
-        for (int i = 0; i < count; i++) {
-            sb.append(AnsiSeq.CLEAR_LINE);
-            if (i < count - 1) {
-                sb.append('\n');
-            }
-        }
-        if (count > 1) {
-            sb.append(AnsiSeq.moveUp(count - 1));
-        }
-        sb.append('\r');
-        return sb.toString();
-    }
-
-    private static int displayWidth(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0;
-        }
-        int width = 0;
-        for (int i = 0; i < text.length(); ) {
-            int cp = text.codePointAt(i);
-            width += isWideCodePoint(cp) ? 2 : 1;
-            i += Character.charCount(cp);
-        }
-        return width;
-    }
-
-    private static boolean isWideCodePoint(int cp) {
-        Character.UnicodeScript script = Character.UnicodeScript.of(cp);
-        return script == Character.UnicodeScript.HAN
-                || script == Character.UnicodeScript.HIRAGANA
-                || script == Character.UnicodeScript.KATAKANA
-                || script == Character.UnicodeScript.HANGUL
-                || (cp >= 0x1F300 && cp <= 0x1FAFF)
-                || (cp >= 0xFF01 && cp <= 0xFF60);
-    }
-
-    private static String stripAnsi(String s) {
-        if (s == null || s.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char ch = s.charAt(i);
-            if (ch == '' && i + 1 < s.length() && s.charAt(i + 1) == '[') {
-                int j = i + 2;
-                while (j < s.length()) {
-                    char c = s.charAt(j);
-                    if (c >= '@' && c <= '~') {
-                        break;
-                    }
-                    j++;
-                }
-                i = j;
-                continue;
-            }
-            sb.append(ch);
-        }
-        return sb.toString();
-    }
-
-    private static String stripTrailingNewline(String s) {
-        if (s == null || s.isEmpty()) {
-            return s == null ? "" : s;
-        }
-        int end = s.length();
-        if (s.charAt(end - 1) == '\n') {
-            end--;
-        }
-        if (end > 0 && s.charAt(end - 1) == '\r') {
-            end--;
-        }
-        return s.substring(0, end);
     }
 
     private void redrawTranscript() {

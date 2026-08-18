@@ -14,6 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 class MainPlanAgentFactoryTest {
 
+    private static Object readField(Object target, String fieldName) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(target);
+    }
+
     @Test
     void planModeReusesReactToolRegistryAndMemoryManager() throws Exception {
         LlmClient llmClient = new GLMClient("test-key");
@@ -29,11 +35,5 @@ class MainPlanAgentFactoryTest {
 
         assertSame(sharedToolRegistry, readField(planAgent, "toolRegistry"));
         assertSame(sharedMemoryManager, readField(planAgent, "memoryManager"));
-    }
-
-    private static Object readField(Object target, String fieldName) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return field.get(target);
     }
 }

@@ -15,14 +15,6 @@ public class ExecutionPlan {
     private long startTime;
     private long endTime;
 
-    public enum PlanStatus {
-        CREATED,
-        RUNNING,
-        COMPLETED,
-        FAILED,
-        CANCELLED
-    }
-
     public ExecutionPlan(String id, String goal) {
         this.id = id;
         this.goal = goal;
@@ -43,8 +35,16 @@ public class ExecutionPlan {
         return status;
     }
 
+    public void setStatus(PlanStatus status) {
+        this.status = status;
+    }
+
     public String getSummary() {
         return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
     }
 
     public long getStartTime() {
@@ -55,15 +55,9 @@ public class ExecutionPlan {
         return endTime;
     }
 
-    public void setSummary(String summary) {
-        this.summary = summary;
-    }
-
-    public void setStatus(PlanStatus status) {
-        this.status = status;
-    }
-
-    /** 加入任务时同步当前已存在依赖的反向索引 */
+    /**
+     * 加入任务时同步当前已存在依赖的反向索引
+     */
     public void addTask(Task task) {
         tasks.put(task.getId(), task);
         for (String depId : task.getDependencies()) {
@@ -94,7 +88,9 @@ public class ExecutionPlan {
                 .toList();
     }
 
-    /** 重建拓扑顺序，依赖图有环时返回 {@code false} */
+    /**
+     * 重建拓扑顺序，依赖图有环时返回 {@code false}
+     */
     public boolean computeExecutionOrder() {
         executionOrder.clear();
         Set<String> visited = new HashSet<>();
@@ -138,7 +134,9 @@ public class ExecutionPlan {
         return true;
     }
 
-    /** 延迟计算执行顺序并返回副本 */
+    /**
+     * 延迟计算执行顺序并返回副本
+     */
     public List<String> getExecutionOrder() {
         if (executionOrder.isEmpty()) {
             computeExecutionOrder();
@@ -312,5 +310,13 @@ public class ExecutionPlan {
     public String toString() {
         return String.format("ExecutionPlan[%s: %s] (%d tasks, %s)",
                 id, goal, tasks.size(), status);
+    }
+
+    public enum PlanStatus {
+        CREATED,
+        RUNNING,
+        COMPLETED,
+        FAILED,
+        CANCELLED
     }
 }

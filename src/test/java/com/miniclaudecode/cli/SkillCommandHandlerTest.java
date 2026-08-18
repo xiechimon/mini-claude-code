@@ -13,6 +13,23 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SkillCommandHandlerTest {
 
+    private static SkillRegistry registryWith(Path tempDir, SkillSpec... specs) throws IOException {
+        Path userRoot = tempDir.resolve("user-skills");
+        Files.createDirectories(userRoot);
+        for (SkillSpec spec : specs) {
+            Path dir = userRoot.resolve(spec.name());
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("SKILL.md"),
+                    "---\nname: " + spec.name()
+                            + "\ndescription: " + spec.desc()
+                            + "\nversion: \"" + spec.version() + "\"\n---\nbody for " + spec.name() + "\n");
+        }
+        SkillStateStore state = new SkillStateStore(tempDir.resolve("skills.json"));
+        SkillRegistry registry = new SkillRegistry(null, userRoot, null, state);
+        registry.reload();
+        return registry;
+    }
+
     @Test
     void startupSummaryOnlyShowsCounts(@TempDir Path tempDir) throws IOException {
         SkillRegistry registry = registryWith(tempDir,
@@ -98,22 +115,5 @@ class SkillCommandHandlerTest {
     }
 
     private record SkillSpec(String name, String desc, String version) {
-    }
-
-    private static SkillRegistry registryWith(Path tempDir, SkillSpec... specs) throws IOException {
-        Path userRoot = tempDir.resolve("user-skills");
-        Files.createDirectories(userRoot);
-        for (SkillSpec spec : specs) {
-            Path dir = userRoot.resolve(spec.name());
-            Files.createDirectories(dir);
-            Files.writeString(dir.resolve("SKILL.md"),
-                    "---\nname: " + spec.name()
-                            + "\ndescription: " + spec.desc()
-                            + "\nversion: \"" + spec.version() + "\"\n---\nbody for " + spec.name() + "\n");
-        }
-        SkillStateStore state = new SkillStateStore(tempDir.resolve("skills.json"));
-        SkillRegistry registry = new SkillRegistry(null, userRoot, null, state);
-        registry.reload();
-        return registry;
     }
 }

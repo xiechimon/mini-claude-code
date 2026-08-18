@@ -29,6 +29,70 @@ final class MiniClaudeCodeCompleter implements Completer {
         this.skillSupplier = skillSupplier == null ? List::of : skillSupplier;
     }
 
+    private static List<Candidate> localPathCandidates(String prefix, String group) {
+        java.nio.file.Path base;
+        String filePrefix;
+        if (prefix == null || prefix.isBlank()) {
+            base = java.nio.file.Path.of(".");
+            filePrefix = "";
+        } else {
+            java.nio.file.Path typed = java.nio.file.Path.of(prefix);
+            base = typed.getParent() == null ? java.nio.file.Path.of(".") : typed.getParent();
+            filePrefix = typed.getFileName() == null ? "" : typed.getFileName().toString();
+        }
+        if (!java.nio.file.Files.isDirectory(base)) {
+            return List.of();
+        }
+        List<Candidate> result = new ArrayList<>();
+        try (var stream = java.nio.file.Files.list(base)) {
+            stream.sorted().limit(50).forEach(path -> {
+                String name = path.getFileName().toString();
+                if (!name.startsWith(filePrefix)) {
+                    return;
+                }
+                boolean dir = java.nio.file.Files.isDirectory(path);
+                String value = base.equals(java.nio.file.Path.of("."))
+                        ? name
+                        : base.resolve(name).toString();
+                if (dir) {
+                    value += java.io.File.separator;
+                }
+                result.add(new Candidate(value, value, group, dir ? "目录" : "文件", null, null, !dir));
+            });
+        } catch (Exception ignored) {
+            return List.of();
+        }
+        return result;
+    }
+
+    private static CommandOption option(String value, String description) {
+        return new CommandOption(value, description, null);
+    }
+
+    private static CommandOption option(String value, String description, String display) {
+        return new CommandOption(value, description, display);
+    }
+
+    private static void addMatching(List<Candidate> candidates, String group, String prefix, CommandOption... options) {
+        for (CommandOption option : options) {
+            if (matches(option.value(), prefix)) {
+                candidates.add(new Candidate(
+                        option.value(),
+                        option.display() == null ? option.value().trim() : option.display(),
+                        group,
+                        option.description(),
+                        null,
+                        null,
+                        option.value().endsWith(" ")
+                ));
+            }
+        }
+    }
+
+    private static boolean matches(String value, String prefix) {
+        return prefix == null || prefix.isBlank() || value.toLowerCase().startsWith(prefix.toLowerCase());
+    }
+
     @Override
     public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
         if (line == null || candidates == null) {
@@ -274,70 +338,6 @@ final class MiniClaudeCodeCompleter implements Completer {
                     true
             ));
         }
-    }
-
-    private static List<Candidate> localPathCandidates(String prefix, String group) {
-        java.nio.file.Path base;
-        String filePrefix;
-        if (prefix == null || prefix.isBlank()) {
-            base = java.nio.file.Path.of(".");
-            filePrefix = "";
-        } else {
-            java.nio.file.Path typed = java.nio.file.Path.of(prefix);
-            base = typed.getParent() == null ? java.nio.file.Path.of(".") : typed.getParent();
-            filePrefix = typed.getFileName() == null ? "" : typed.getFileName().toString();
-        }
-        if (!java.nio.file.Files.isDirectory(base)) {
-            return List.of();
-        }
-        List<Candidate> result = new ArrayList<>();
-        try (var stream = java.nio.file.Files.list(base)) {
-            stream.sorted().limit(50).forEach(path -> {
-                String name = path.getFileName().toString();
-                if (!name.startsWith(filePrefix)) {
-                    return;
-                }
-                boolean dir = java.nio.file.Files.isDirectory(path);
-                String value = base.equals(java.nio.file.Path.of("."))
-                        ? name
-                        : base.resolve(name).toString();
-                if (dir) {
-                    value += java.io.File.separator;
-                }
-                result.add(new Candidate(value, value, group, dir ? "目录" : "文件", null, null, !dir));
-            });
-        } catch (Exception ignored) {
-            return List.of();
-        }
-        return result;
-    }
-
-    private static CommandOption option(String value, String description) {
-        return new CommandOption(value, description, null);
-    }
-
-    private static CommandOption option(String value, String description, String display) {
-        return new CommandOption(value, description, display);
-    }
-
-    private static void addMatching(List<Candidate> candidates, String group, String prefix, CommandOption... options) {
-        for (CommandOption option : options) {
-            if (matches(option.value(), prefix)) {
-                candidates.add(new Candidate(
-                        option.value(),
-                        option.display() == null ? option.value().trim() : option.display(),
-                        group,
-                        option.description(),
-                        null,
-                        null,
-                        option.value().endsWith(" ")
-                ));
-            }
-        }
-    }
-
-    private static boolean matches(String value, String prefix) {
-        return prefix == null || prefix.isBlank() || value.toLowerCase().startsWith(prefix.toLowerCase());
     }
 
     private record CommandOption(String value, String description, String display) {

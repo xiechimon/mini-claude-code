@@ -11,31 +11,6 @@ import java.util.stream.Collectors;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record McpCallToolResult(List<McpContent> content, boolean isError) {
-    public String formatForLlm() {
-        return toToolOutput().text();
-    }
-
-    public ToolOutput toToolOutput() {
-        if (content == null || content.isEmpty()) {
-            return ToolOutput.text(isError ? "MCP 工具返回错误，但没有错误正文" : "");
-        }
-        List<LlmClient.ContentPart> imageParts = new ArrayList<>();
-        String text = content.stream()
-                .map(item -> {
-                    String type = item.type() == null || item.type().isBlank() ? "text" : item.type();
-                    if ("text".equals(type)) {
-                        return item.text() == null ? "" : item.text();
-                    }
-                    if ("image".equals(type)) {
-                        return formatImage(item, imageParts);
-                    }
-                    return "[此工具返回了 " + type + "，请向用户描述结果]";
-                })
-                .filter(s -> !s.isBlank())
-                .collect(Collectors.joining("\n\n"));
-        return new ToolOutput(text, imageParts);
-    }
-
     private static String formatImage(McpContent item, List<LlmClient.ContentPart> imageParts) {
         String mimeType = item.mimeType() == null || item.mimeType().isBlank()
                 ? "image/png"
@@ -71,5 +46,30 @@ public record McpCallToolResult(List<McpContent> content, boolean isError) {
                     + "如果模型无法稳定识别该图片，请优先调用 take_snapshot 获取 DOM 文本快照。]");
         }
         return fallback.toString();
+    }
+
+    public String formatForLlm() {
+        return toToolOutput().text();
+    }
+
+    public ToolOutput toToolOutput() {
+        if (content == null || content.isEmpty()) {
+            return ToolOutput.text(isError ? "MCP 工具返回错误，但没有错误正文" : "");
+        }
+        List<LlmClient.ContentPart> imageParts = new ArrayList<>();
+        String text = content.stream()
+                .map(item -> {
+                    String type = item.type() == null || item.type().isBlank() ? "text" : item.type();
+                    if ("text".equals(type)) {
+                        return item.text() == null ? "" : item.text();
+                    }
+                    if ("image".equals(type)) {
+                        return formatImage(item, imageParts);
+                    }
+                    return "[此工具返回了 " + type + "，请向用户描述结果]";
+                })
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.joining("\n\n"));
+        return new ToolOutput(text, imageParts);
     }
 }

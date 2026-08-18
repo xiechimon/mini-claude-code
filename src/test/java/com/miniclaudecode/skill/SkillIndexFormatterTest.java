@@ -9,6 +9,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SkillIndexFormatterTest {
 
+    private static Skill mockSkill(String name, String desc, Skill.Source source) {
+        return new Skill(name, desc, "1.0.0", null, List.of(), source, "body", null, null);
+    }
+
     @Test
     void emptyListReturnsEmptyString() {
         assertEquals("", SkillIndexFormatter.format(List.of()));
@@ -61,9 +65,5 @@ class SkillIndexFormatterTest {
         String truncated = SkillIndexFormatter.truncateByCodepoint(s, 2);
         assertTrue(truncated.startsWith("中文"));
         assertTrue(truncated.endsWith("..."));
-    }
-
-    private static Skill mockSkill(String name, String desc, Skill.Source source) {
-        return new Skill(name, desc, "1.0.0", null, List.of(), source, "body", null, null);
     }
 }

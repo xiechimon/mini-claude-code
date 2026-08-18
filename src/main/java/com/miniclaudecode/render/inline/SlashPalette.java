@@ -17,12 +17,45 @@ import java.util.List;
  */
 public final class SlashPalette {
 
+    private static final int KEY_ESC = -2;
+    private static final int KEY_UP = -3;
+    private static final int KEY_DOWN = -4;
+    private static final int DECISION_CANCEL = -1;
+    private static final int DECISION_CONFIRM = -2;
+    private static final int DECISION_UP = -3;
+    private static final int DECISION_DOWN = -4;
+    private static final int DECISION_NONE = -5;
     private final PrintStream out;
     private final Terminal terminal;
 
     public SlashPalette(PrintStream out, Terminal terminal) {
         this.out = out;
         this.terminal = terminal;
+    }
+
+    static int handleKey(int key, int selected, int itemCount) {
+        if (key == KEY_UP) {
+            return DECISION_UP;
+        }
+        if (key == KEY_DOWN) {
+            return DECISION_DOWN;
+        }
+        if (key == KEY_ESC || key < 0) {
+            return DECISION_CANCEL;
+        }
+        if (key == '\r' || key == '\n') {
+            return DECISION_CONFIRM;
+        }
+        if (key >= '1' && key <= '9') {
+            int idx = key - '1';
+            if (idx < itemCount) {
+                return idx;
+            }
+        }
+        if (key == 'k' || key == 'K') return DECISION_UP;
+        if (key == 'j' || key == 'J') return DECISION_DOWN;
+        if (key == 'q' || key == 'Q') return DECISION_CANCEL;
+        return DECISION_NONE;
     }
 
     /**
@@ -123,40 +156,5 @@ public final class SlashPalette {
             } catch (Exception ignored) {
             }
         }
-    }
-
-    private static final int KEY_ESC = -2;
-    private static final int KEY_UP = -3;
-    private static final int KEY_DOWN = -4;
-
-    private static final int DECISION_CANCEL = -1;
-    private static final int DECISION_CONFIRM = -2;
-    private static final int DECISION_UP = -3;
-    private static final int DECISION_DOWN = -4;
-    private static final int DECISION_NONE = -5;
-
-    static int handleKey(int key, int selected, int itemCount) {
-        if (key == KEY_UP) {
-            return DECISION_UP;
-        }
-        if (key == KEY_DOWN) {
-            return DECISION_DOWN;
-        }
-        if (key == KEY_ESC || key < 0) {
-            return DECISION_CANCEL;
-        }
-        if (key == '\r' || key == '\n') {
-            return DECISION_CONFIRM;
-        }
-        if (key >= '1' && key <= '9') {
-            int idx = key - '1';
-            if (idx < itemCount) {
-                return idx;
-            }
-        }
-        if (key == 'k' || key == 'K') return DECISION_UP;
-        if (key == 'j' || key == 'J') return DECISION_DOWN;
-        if (key == 'q' || key == 'Q') return DECISION_CANCEL;
-        return DECISION_NONE;
     }
 }

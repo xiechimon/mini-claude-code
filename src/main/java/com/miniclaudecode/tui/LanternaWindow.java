@@ -12,9 +12,12 @@ import com.miniclaudecode.llm.LlmClient;
 import java.io.IOException;
 import java.util.Objects;
 
-/** 拥有 Lanterna Screen、GUI 主窗口和事件线程调度 */
+/**
+ * 拥有 Lanterna Screen、GUI 主窗口和事件线程调度
+ */
 public final class LanternaWindow {
 
+    private static volatile boolean tuiMode = false;
     private final Screen screen;
     private final WindowBasedTextGUI gui;
     private final LlmClient llmClient;
@@ -23,8 +26,6 @@ public final class LanternaWindow {
     private final RootPane rootPane;
     private Runnable closeHook = () -> {
     };
-
-    private static volatile boolean tuiMode = false;
 
     /**
      * 创建并启动 Screen，调用方随后通过 {@link #start()} 进入阻塞主循环
@@ -51,7 +52,13 @@ public final class LanternaWindow {
         tuiMode = true;
     }
 
-    /** 阻塞运行 TUI 主循环直到窗口关闭 */
+    public static boolean isTuiMode() {
+        return tuiMode;
+    }
+
+    /**
+     * 阻塞运行 TUI 主循环直到窗口关闭
+     */
     public void start() {
         try {
             gui.waitForWindowToClose(mainWindow);
@@ -83,10 +90,6 @@ public final class LanternaWindow {
     public void setCloseHook(Runnable closeHook) {
         this.closeHook = closeHook == null ? () -> {
         } : closeHook;
-    }
-
-    public static boolean isTuiMode() {
-        return tuiMode;
     }
 
     public void runOnGuiThread(Runnable task) {

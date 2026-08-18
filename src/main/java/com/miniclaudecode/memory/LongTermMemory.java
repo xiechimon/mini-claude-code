@@ -51,6 +51,34 @@ public class LongTermMemory implements Memory {
         loadFromDisk();
     }
 
+    public static boolean isVisibleInProject(MemoryEntry entry, String projectKey) {
+        String scope = scopeOf(entry);
+        if ("global".equals(scope)) {
+            return true;
+        }
+        String entryProject = entry.metadata().get("project");
+        return projectKey != null && !projectKey.isBlank() && Objects.equals(entryProject, projectKey);
+    }
+
+    public static String scopeOf(MemoryEntry entry) {
+        String scope = entry.metadata().get("scope");
+        if ("project".equalsIgnoreCase(scope)) {
+            return "project";
+        }
+        return "global";
+    }
+
+    private static File resolveStorageDir() {
+        String configuredDir = System.getProperty(STORAGE_DIR_PROPERTY);
+        if (configuredDir == null || configuredDir.isBlank()) {
+            configuredDir = System.getenv(STORAGE_DIR_ENV);
+        }
+        if (configuredDir != null && !configuredDir.isBlank()) {
+            return new File(configuredDir);
+        }
+        return new File(new File(System.getProperty("user.home"), ".mini-claude-code"), "memory");
+    }
+
     @Override
     public void store(MemoryEntry entry) {
         // 去重检查：如果已存在内容完全相同的条目，跳过
@@ -139,23 +167,6 @@ public class LongTermMemory implements Memory {
                 .collect(Collectors.toList());
     }
 
-    public static boolean isVisibleInProject(MemoryEntry entry, String projectKey) {
-        String scope = scopeOf(entry);
-        if ("global".equals(scope)) {
-            return true;
-        }
-        String entryProject = entry.metadata().get("project");
-        return projectKey != null && !projectKey.isBlank() && Objects.equals(entryProject, projectKey);
-    }
-
-    public static String scopeOf(MemoryEntry entry) {
-        String scope = entry.metadata().get("scope");
-        if ("project".equalsIgnoreCase(scope)) {
-            return "project";
-        }
-        return "global";
-    }
-
     private void saveToDisk() {
         try {
             List<Map<String, Object>> dataList = entries.values().stream()
@@ -165,17 +176,6 @@ public class LongTermMemory implements Memory {
         } catch (IOException e) {
             log.warn("长期记忆持久化失败: {}", e.getMessage(), e);
         }
-    }
-
-    private static File resolveStorageDir() {
-        String configuredDir = System.getProperty(STORAGE_DIR_PROPERTY);
-        if (configuredDir == null || configuredDir.isBlank()) {
-            configuredDir = System.getenv(STORAGE_DIR_ENV);
-        }
-        if (configuredDir != null && !configuredDir.isBlank()) {
-            return new File(configuredDir);
-        }
-        return new File(new File(System.getProperty("user.home"), ".mini-claude-code"), "memory");
     }
 
     @SuppressWarnings("unchecked")

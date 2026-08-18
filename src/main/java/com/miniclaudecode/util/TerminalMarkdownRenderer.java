@@ -46,6 +46,92 @@ public final class TerminalMarkdownRenderer {
                 : terminalColumnsSupplier;
     }
 
+    public static String render(String markdown) {
+        return render(markdown, resolveTerminalColumns());
+    }
+
+    public static String render(String markdown, int terminalColumns) {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        PrintStream stream = new PrintStream(buffer);
+        TerminalMarkdownRenderer renderer = new TerminalMarkdownRenderer(stream, terminalColumns);
+        renderer.append(markdown);
+        renderer.finish();
+        stream.flush();
+        return buffer.toString();
+    }
+
+    /**
+     * 计算字符串在终端占用的显示列宽（CJK / 全角符号按 2 列，组合符号按 0 列）
+     *
+     * <p>包级可见：表格排版按显示宽度分配列宽，同包测试需要用同一套算法断言，
+     * 避免测试另写一份宽度逻辑与实现跑偏
+     *
+     * @param value 待测量文本，可为 null
+     * @return 显示列宽，null 或空串返回 0
+     */
+    static int displayWidth(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+        int width = 0;
+        for (int offset = 0; offset < value.length(); ) {
+            int cp = value.codePointAt(offset);
+            width += codePointWidth(cp);
+            offset += Character.charCount(cp);
+        }
+        return width;
+    }
+
+    private static int codePointWidth(int cp) {
+        if (Character.isISOControl(cp)) {
+            return 0;
+        }
+        int type = Character.getType(cp);
+        if (type == Character.NON_SPACING_MARK
+                || type == Character.ENCLOSING_MARK
+                || type == Character.COMBINING_SPACING_MARK
+                || (cp >= 0xFE00 && cp <= 0xFE0F)) {
+            return 0;
+        }
+        Character.UnicodeScript script = Character.UnicodeScript.of(cp);
+        return switch (script) {
+            case HAN, HIRAGANA, KATAKANA, HANGUL -> 2;
+            default -> isWideSymbol(cp) ? 2 : 1;
+        };
+    }
+
+    private static boolean isWideSymbol(int cp) {
+        return (cp >= 0x1100 && cp <= 0x115F)
+                || (cp >= 0x2329 && cp <= 0x232A)
+                || (cp >= 0x2E80 && cp <= 0xA4CF)
+                || (cp >= 0xAC00 && cp <= 0xD7A3)
+                || (cp >= 0xF900 && cp <= 0xFAFF)
+                || (cp >= 0xFE10 && cp <= 0xFE19)
+                || (cp >= 0xFE30 && cp <= 0xFE6F)
+                || (cp >= 0xFF00 && cp <= 0xFF60)
+                || (cp >= 0xFFE0 && cp <= 0xFFE6)
+                || (cp >= 0x2600 && cp <= 0x27BF)
+                || (cp >= 0x1F000 && cp <= 0x1FAFF);
+    }
+
+    private static int resolveTerminalColumns() {
+        String sysValue = System.getProperty("mini-claude-code.render.columns");
+        if (sysValue != null && !sysValue.isBlank()) {
+            try {
+                return Math.max(40, Integer.parseInt(sysValue.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        String envValue = System.getenv("COLUMNS");
+        if (envValue != null && !envValue.isBlank()) {
+            try {
+                return Math.max(40, Integer.parseInt(envValue.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return DEFAULT_TERMINAL_COLUMNS;
+    }
+
     public void append(String chunk) {
         if (chunk == null || chunk.isEmpty()) {
             return;
@@ -61,20 +147,6 @@ public final class TerminalMarkdownRenderer {
             pending.setLength(0);
         }
         flushPendingTable();
-    }
-
-    public static String render(String markdown) {
-        return render(markdown, resolveTerminalColumns());
-    }
-
-    public static String render(String markdown, int terminalColumns) {
-        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-        PrintStream stream = new PrintStream(buffer);
-        TerminalMarkdownRenderer renderer = new TerminalMarkdownRenderer(stream, terminalColumns);
-        renderer.append(markdown);
-        renderer.finish();
-        stream.flush();
-        return buffer.toString();
     }
 
     private void flushCompleteLines() {
@@ -491,84 +563,12 @@ public final class TerminalMarkdownRenderer {
         return max;
     }
 
-    /**
-     * 计算字符串在终端占用的显示列宽（CJK / 全角符号按 2 列，组合符号按 0 列）
-     *
-     * <p>包级可见：表格排版按显示宽度分配列宽，同包测试需要用同一套算法断言，
-     * 避免测试另写一份宽度逻辑与实现跑偏
-     *
-     * @param value 待测量文本，可为 null
-     * @return 显示列宽，null 或空串返回 0
-     */
-    static int displayWidth(String value) {
-        if (value == null || value.isEmpty()) {
-            return 0;
-        }
-        int width = 0;
-        for (int offset = 0; offset < value.length(); ) {
-            int cp = value.codePointAt(offset);
-            width += codePointWidth(cp);
-            offset += Character.charCount(cp);
-        }
-        return width;
-    }
-
-    private static int codePointWidth(int cp) {
-        if (Character.isISOControl(cp)) {
-            return 0;
-        }
-        int type = Character.getType(cp);
-        if (type == Character.NON_SPACING_MARK
-                || type == Character.ENCLOSING_MARK
-                || type == Character.COMBINING_SPACING_MARK
-                || (cp >= 0xFE00 && cp <= 0xFE0F)) {
-            return 0;
-        }
-        Character.UnicodeScript script = Character.UnicodeScript.of(cp);
-        return switch (script) {
-            case HAN, HIRAGANA, KATAKANA, HANGUL -> 2;
-            default -> isWideSymbol(cp) ? 2 : 1;
-        };
-    }
-
-    private static boolean isWideSymbol(int cp) {
-        return (cp >= 0x1100 && cp <= 0x115F)
-                || (cp >= 0x2329 && cp <= 0x232A)
-                || (cp >= 0x2E80 && cp <= 0xA4CF)
-                || (cp >= 0xAC00 && cp <= 0xD7A3)
-                || (cp >= 0xF900 && cp <= 0xFAFF)
-                || (cp >= 0xFE10 && cp <= 0xFE19)
-                || (cp >= 0xFE30 && cp <= 0xFE6F)
-                || (cp >= 0xFF00 && cp <= 0xFF60)
-                || (cp >= 0xFFE0 && cp <= 0xFFE6)
-                || (cp >= 0x2600 && cp <= 0x27BF)
-                || (cp >= 0x1F000 && cp <= 0x1FAFF);
-    }
-
     private int terminalColumns() {
         try {
             return Math.max(40, terminalColumnsSupplier.getAsInt());
         } catch (Exception e) {
             return DEFAULT_TERMINAL_COLUMNS;
         }
-    }
-
-    private static int resolveTerminalColumns() {
-        String sysValue = System.getProperty("mini-claude-code.render.columns");
-        if (sysValue != null && !sysValue.isBlank()) {
-            try {
-                return Math.max(40, Integer.parseInt(sysValue.trim()));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        String envValue = System.getenv("COLUMNS");
-        if (envValue != null && !envValue.isBlank()) {
-            try {
-                return Math.max(40, Integer.parseInt(envValue.trim()));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return DEFAULT_TERMINAL_COLUMNS;
     }
 
     private int indentLevel(String leadingWhitespace) {

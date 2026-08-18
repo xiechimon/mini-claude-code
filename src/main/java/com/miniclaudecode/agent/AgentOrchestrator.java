@@ -56,31 +56,6 @@ public class AgentOrchestrator {
     private final PrintStream out;
     private Supplier<String> externalContextSupplier = () -> "";
 
-    // package-private 便于验证调度状态转换
-    record ExecutionStep(String id, String description, String type,
-                         List<String> dependencies, String result,
-                         StepStatus status) {
-        static ExecutionStep pending(String id, String description, String type, List<String> dependencies) {
-            return new ExecutionStep(id, description, type, dependencies, null, StepStatus.PENDING);
-        }
-
-        ExecutionStep withResult(String result) {
-            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.COMPLETED);
-        }
-
-        ExecutionStep withFailed(String result) {
-            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.FAILED);
-        }
-
-        ExecutionStep started() {
-            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.RUNNING);
-        }
-    }
-
-    enum StepStatus {
-        PENDING, RUNNING, COMPLETED, FAILED
-    }
-
     public AgentOrchestrator(LlmClient llmClient) {
         this(llmClient, new ToolRegistry(), new MemoryManager(llmClient));
     }
@@ -620,5 +595,30 @@ public class AgentOrchestrator {
         }
 
         return result.toString();
+    }
+
+    enum StepStatus {
+        PENDING, RUNNING, COMPLETED, FAILED
+    }
+
+    // package-private 便于验证调度状态转换
+    record ExecutionStep(String id, String description, String type,
+                         List<String> dependencies, String result,
+                         StepStatus status) {
+        static ExecutionStep pending(String id, String description, String type, List<String> dependencies) {
+            return new ExecutionStep(id, description, type, dependencies, null, StepStatus.PENDING);
+        }
+
+        ExecutionStep withResult(String result) {
+            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.COMPLETED);
+        }
+
+        ExecutionStep withFailed(String result) {
+            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.FAILED);
+        }
+
+        ExecutionStep started() {
+            return new ExecutionStep(id, description, type, dependencies, result, StepStatus.RUNNING);
+        }
     }
 }

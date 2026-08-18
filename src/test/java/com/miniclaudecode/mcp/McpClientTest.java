@@ -15,6 +15,14 @@ class McpClientTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static JsonNode readJson(String json) {
+        try {
+            return MAPPER.readTree(json);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Test
     void initializeSendsHandshakeAndInitializedNotification() throws Exception {
         InMemoryTransport transport = new InMemoryTransport()
@@ -278,13 +286,5 @@ class McpClientTest {
         assertTrue(client.supportsPrompts());
         assertEquals(List.of("Review (review) - Review code"), prompts);
         client.close();
-    }
-
-    private static JsonNode readJson(String json) {
-        try {
-            return MAPPER.readTree(json);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 }

@@ -17,7 +17,8 @@ public class EmbeddingClient {
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .build();
-
+    // 安全截断长度（中文密集文本 2000 字符 ≈ 4000~6000 token，适配 8192 上下文模型）
+    private static final int MAX_INPUT_CHARS = 2000;
     private final String provider;
     private final String model;
     private final String baseUrl;
@@ -37,8 +38,25 @@ public class EmbeddingClient {
         this.apiKey = apiKey;
     }
 
-    // 安全截断长度（中文密集文本 2000 字符 ≈ 4000~6000 token，适配 8192 上下文模型）
-    private static final int MAX_INPUT_CHARS = 2000;
+    private static String inferDefaultUrl(String provider) {
+        return switch (provider.toLowerCase()) {
+            case "ollama" -> "http://localhost:11434";
+            case "zhipu", "glm" -> "https://open.bigmodel.cn/api/paas/v4";
+            default -> "http://localhost:11434";
+        };
+    }
+
+    private static String getEnv(String key, String defaultValue) {
+        String value = System.getenv(key);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        value = System.getProperty(key);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        return defaultValue;
+    }
 
     public float[] embed(String text) throws IOException {
         if (text == null || text.isEmpty()) {
@@ -124,26 +142,6 @@ public class EmbeddingClient {
             }
             return responseBody.string();
         }
-    }
-
-    private static String inferDefaultUrl(String provider) {
-        return switch (provider.toLowerCase()) {
-            case "ollama" -> "http://localhost:11434";
-            case "zhipu", "glm" -> "https://open.bigmodel.cn/api/paas/v4";
-            default -> "http://localhost:11434";
-        };
-    }
-
-    private static String getEnv(String key, String defaultValue) {
-        String value = System.getenv(key);
-        if (value != null && !value.isEmpty()) {
-            return value;
-        }
-        value = System.getProperty(key);
-        if (value != null && !value.isEmpty()) {
-            return value;
-        }
-        return defaultValue;
     }
 
     public String getProvider() {

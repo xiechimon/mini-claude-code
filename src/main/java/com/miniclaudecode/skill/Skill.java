@@ -23,10 +23,6 @@ public record Skill(
         Path referencesDir
 ) {
 
-    public enum Source {
-        BUILTIN, USER, PROJECT
-    }
-
     public Skill {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Skill name 不能为空");
@@ -50,5 +46,9 @@ public record Skill(
             case USER -> "user";
             case PROJECT -> "project";
         };
+    }
+
+    public enum Source {
+        BUILTIN, USER, PROJECT
     }
 }

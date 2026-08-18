@@ -31,27 +31,17 @@ import java.util.Locale;
  */
 public class AgentBudget {
 
-    public enum ExitReason {
-        WITHIN_BUDGET,
-        TOKEN_BUDGET_EXCEEDED,
-        STAGNATION_DETECTED,
-        HARD_ITERATION_LIMIT
-    }
-
     private static final int DEFAULT_STAGNATION_WINDOW = 3;
     private static final int DEFAULT_HARD_MAX_ITERATIONS = 50;
-
     private final int tokenBudget;
     private final int stagnationWindow;
     private final int hardMaxIterations;
-
     private final Deque<String> recentToolSignatures = new ArrayDeque<>();
     private int iteration;
     private int totalInputTokens;
     private int totalOutputTokens;
     private int totalCachedInputTokens;
     private boolean stagnant;
-
     public AgentBudget(int tokenBudget, int stagnationWindow, int hardMaxIterations) {
         if (tokenBudget <= 0) {
             throw new IllegalArgumentException("tokenBudget must be positive");
@@ -80,6 +70,27 @@ public class AgentBudget {
                 readIntProperty("mini-claude-code.react.stagnation.window", DEFAULT_STAGNATION_WINDOW),
                 readIntProperty("mini-claude-code.react.hard.max.iterations", DEFAULT_HARD_MAX_ITERATIONS)
         );
+    }
+
+    private static String signatureOf(List<LlmClient.ToolCall> toolCalls) {
+        StringBuilder sb = new StringBuilder();
+        for (LlmClient.ToolCall tc : toolCalls) {
+            sb.append(tc.function().name()).append('|').append(tc.function().arguments()).append(';');
+        }
+        return sb.toString();
+    }
+
+    private static int readIntProperty(String key, int defaultValue) {
+        String raw = System.getProperty(key);
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(raw.trim());
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     /**
@@ -176,24 +187,10 @@ public class AgentBudget {
         };
     }
 
-    private static String signatureOf(List<LlmClient.ToolCall> toolCalls) {
-        StringBuilder sb = new StringBuilder();
-        for (LlmClient.ToolCall tc : toolCalls) {
-            sb.append(tc.function().name()).append('|').append(tc.function().arguments()).append(';');
-        }
-        return sb.toString();
-    }
-
-    private static int readIntProperty(String key, int defaultValue) {
-        String raw = System.getProperty(key);
-        if (raw == null || raw.isBlank()) {
-            return defaultValue;
-        }
-        try {
-            int parsed = Integer.parseInt(raw.trim());
-            return parsed > 0 ? parsed : defaultValue;
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+    public enum ExitReason {
+        WITHIN_BUDGET,
+        TOKEN_BUDGET_EXCEEDED,
+        STAGNATION_DETECTED,
+        HARD_ITERATION_LIMIT
     }
 }

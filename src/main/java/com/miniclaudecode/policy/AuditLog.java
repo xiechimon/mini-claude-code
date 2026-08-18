@@ -59,6 +59,36 @@ public class AuditLog {
         this.auditDir = auditDir;
     }
 
+    private static Path defaultAuditDir() {
+        String prop = System.getProperty("mini-claude-code.audit.dir");
+        if (prop != null && !prop.isBlank()) {
+            return Path.of(prop);
+        }
+        String env = System.getenv("MINI_CLAUDE_CODE_AUDIT_DIR");
+        if (env != null && !env.isBlank()) {
+            return Path.of(env);
+        }
+        return Path.of(System.getProperty("user.home"), ".mini-claude-code", "audit");
+    }
+
+    private static String truncate(String s) {
+        if (s == null) return null;
+        String sanitized = sanitize(s);
+        return sanitized.length() <= MAX_FIELD_CHARS ? sanitized : sanitized.substring(0, MAX_FIELD_CHARS) + "...(truncated)";
+    }
+
+    static String sanitize(String s) {
+        if (s == null) return null;
+        String sanitized = s.replaceAll("(?i)Bearer\\s+[^\\s\"'}]+", "Bearer ***");
+        sanitized = sanitized.replaceAll(
+                "(?i)(\"?(?:token|key|password|secret|authorization)\"?\\s*[:=]\\s*\")([^\"]+)(\")",
+                "$1***$3");
+        sanitized = sanitized.replaceAll(
+                "(?i)(\\b(?:token|key|password|secret|authorization)\\b\\s*[:=]\\s*)([^\\s,}]+)",
+                "$1***");
+        return sanitized;
+    }
+
     public Path getAuditDir() {
         return auditDir;
     }
@@ -109,36 +139,6 @@ public class AuditLog {
 
     private Path todayFile() {
         return auditDir.resolve("audit-" + LocalDate.now().format(DATE_FMT) + ".jsonl");
-    }
-
-    private static Path defaultAuditDir() {
-        String prop = System.getProperty("mini-claude-code.audit.dir");
-        if (prop != null && !prop.isBlank()) {
-            return Path.of(prop);
-        }
-        String env = System.getenv("MINI_CLAUDE_CODE_AUDIT_DIR");
-        if (env != null && !env.isBlank()) {
-            return Path.of(env);
-        }
-        return Path.of(System.getProperty("user.home"), ".mini-claude-code", "audit");
-    }
-
-    private static String truncate(String s) {
-        if (s == null) return null;
-        String sanitized = sanitize(s);
-        return sanitized.length() <= MAX_FIELD_CHARS ? sanitized : sanitized.substring(0, MAX_FIELD_CHARS) + "...(truncated)";
-    }
-
-    static String sanitize(String s) {
-        if (s == null) return null;
-        String sanitized = s.replaceAll("(?i)Bearer\\s+[^\\s\"'}]+", "Bearer ***");
-        sanitized = sanitized.replaceAll(
-                "(?i)(\"?(?:token|key|password|secret|authorization)\"?\\s*[:=]\\s*\")([^\"]+)(\")",
-                "$1***$3");
-        sanitized = sanitized.replaceAll(
-                "(?i)(\\b(?:token|key|password|secret|authorization)\\b\\s*[:=]\\s*)([^\\s,}]+)",
-                "$1***");
-        return sanitized;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

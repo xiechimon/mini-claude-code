@@ -19,6 +19,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class HitlToolRegistryTest {
 
 
+    private static void registerMcpTool(HitlToolRegistry registry, String serverName, String toolName,
+                                        Function<String, String> invoker) {
+        registry.registerMcpTool(new McpToolDescriptor(
+                serverName,
+                toolName,
+                McpToolDescriptor.namespaced(serverName, toolName),
+                "test tool",
+                JsonNodeFactory.instance.objectNode()
+        ), invoker);
+    }
+
     @Test
     void disabledHitlPassesThroughToParent() {
         TerminalHitlHandler handler = new TerminalHitlHandler(false);
@@ -54,7 +65,6 @@ class HitlToolRegistryTest {
         handler.clearApprovedAll();
         assertTrue(handler.isEnabled());
     }
-
 
     @Test
     void rejectedDecisionBlocksExecutionAndReturnsRejectMessage(@TempDir Path tempDir) throws Exception {
@@ -234,16 +244,5 @@ class HitlToolRegistryTest {
         public boolean isApprovedAllByServer(String serverName) {
             return approvedServers.contains(serverName);
         }
-    }
-
-    private static void registerMcpTool(HitlToolRegistry registry, String serverName, String toolName,
-                                        Function<String, String> invoker) {
-        registry.registerMcpTool(new McpToolDescriptor(
-                serverName,
-                toolName,
-                McpToolDescriptor.namespaced(serverName, toolName),
-                "test tool",
-                JsonNodeFactory.instance.objectNode()
-        ), invoker);
     }
 }

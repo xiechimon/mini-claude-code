@@ -18,6 +18,23 @@ public class WechatPolicyDecider {
         this.config = config;
     }
 
+    private static boolean isReadOnlyBuiltin(String name) {
+        return switch (name) {
+            case "read_file", "list_dir", "glob_files", "grep_code", "search_code",
+                 "web_search", "web_fetch", "browser_status" -> true;
+            default -> false;
+        };
+    }
+
+    private static String extract(String json, String field) {
+        try {
+            JsonNode node = MAPPER.readTree(json == null || json.isBlank() ? "{}" : json);
+            return node.path(field).asText("").trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /**
      * 根据工具名与 JSON 参数给出最终准入决定
      * 无效 JSON 按空参数处理并保守拒绝
@@ -73,22 +90,5 @@ public class WechatPolicyDecider {
             }
         }
         return WechatPolicyDecision.deny("微信通道默认拒绝 MCP 工具: " + toolName);
-    }
-
-    private static boolean isReadOnlyBuiltin(String name) {
-        return switch (name) {
-            case "read_file", "list_dir", "glob_files", "grep_code", "search_code",
-                 "web_search", "web_fetch", "browser_status" -> true;
-            default -> false;
-        };
-    }
-
-    private static String extract(String json, String field) {
-        try {
-            JsonNode node = MAPPER.readTree(json == null || json.isBlank() ? "{}" : json);
-            return node.path(field).asText("").trim();
-        } catch (Exception e) {
-            return "";
-        }
     }
 }

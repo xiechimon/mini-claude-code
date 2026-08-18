@@ -29,14 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TerminalHitlHandler implements HitlHandler {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private volatile boolean enabled;
-
     private final Set<String> approvedAllByTool = ConcurrentHashMap.newKeySet();
     private final Set<String> approvedAllByServer = ConcurrentHashMap.newKeySet();
-
     private final BufferedReader in;
     private final PrintStream out;
+    private volatile boolean enabled;
 
     public TerminalHitlHandler(boolean enabled) {
         this(enabled,

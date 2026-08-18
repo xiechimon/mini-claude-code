@@ -8,13 +8,6 @@ import java.util.Map;
  */
 public record MemoryEntry(String id, String content, MemoryType type, Instant timestamp, Map<String, String> metadata,
                           int tokenCount) {
-    public enum MemoryType {
-        CONVERSATION,  // 对话记忆
-        FACT,          // 事实记忆（用户偏好、项目信息等）
-        SUMMARY,       // 摘要记忆
-        TOOL_RESULT    // 工具执行结果
-    }
-
     public MemoryEntry(String id, String content, MemoryType type, Map<String, String> metadata, int tokenCount) {
         this(id, content, type, Instant.now(), metadata, tokenCount);
     }
@@ -43,5 +36,12 @@ public record MemoryEntry(String id, String content, MemoryType type, Instant ti
     public String toString() {
         return "[%s] %s: %s".formatted(type, id,
                 content.length() > 80 ? content.substring(0, 80) + "..." : content);
+    }
+
+    public enum MemoryType {
+        CONVERSATION,  // 对话记忆
+        FACT,          // 事实记忆（用户偏好、项目信息等）
+        SUMMARY,       // 摘要记忆
+        TOOL_RESULT    // 工具执行结果
     }
 }

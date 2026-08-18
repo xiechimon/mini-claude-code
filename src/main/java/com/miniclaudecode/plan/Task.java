@@ -11,30 +11,13 @@ public class Task {
     private final String id;
     private final String description;
     private final TaskType type;
+    private final List<String> dependencies;  // 依赖的其他任务ID
+    private final List<String> dependents;    // 依赖此任务的其他任务ID
     private volatile TaskStatus status;
     private volatile String result;
     private volatile String error;
-    private final List<String> dependencies;  // 依赖的其他任务ID
-    private final List<String> dependents;    // 依赖此任务的其他任务ID
     private volatile long startTime;
     private volatile long endTime;
-
-    public enum TaskType {
-        PLANNING,      // 规划任务
-        FILE_READ,     // 读取文件
-        FILE_WRITE,    // 写入文件
-        COMMAND,       // 执行命令
-        ANALYSIS,      // 分析结果
-        VERIFICATION   // 验证结果
-    }
-
-    public enum TaskStatus {
-        PENDING,       // 等待执行
-        RUNNING,       // 执行中
-        COMPLETED,     // 已完成
-        FAILED,        // 失败
-        SKIPPED        // 跳过
-    }
 
     public Task(String id, String description, TaskType type) {
         this.id = id;
@@ -66,12 +49,24 @@ public class Task {
         return status;
     }
 
+    public void setStatus(TaskStatus status) {
+        this.status = status;
+    }
+
     public String getResult() {
         return result;
     }
 
+    public void setResult(String result) {
+        this.result = result;
+    }
+
     public String getError() {
         return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
     }
 
     public List<String> getDependencies() {
@@ -88,18 +83,6 @@ public class Task {
 
     public long getEndTime() {
         return endTime;
-    }
-
-    public void setStatus(TaskStatus status) {
-        this.status = status;
-    }
-
-    public void setResult(String result) {
-        this.result = result;
-    }
-
-    public void setError(String error) {
-        this.error = error;
     }
 
     public void addDependent(String taskId) {
@@ -159,5 +142,22 @@ public class Task {
     @Override
     public String toString() {
         return String.format("Task[%s: %s] (%s)", id, description, status);
+    }
+
+    public enum TaskType {
+        PLANNING,      // 规划任务
+        FILE_READ,     // 读取文件
+        FILE_WRITE,    // 写入文件
+        COMMAND,       // 执行命令
+        ANALYSIS,      // 分析结果
+        VERIFICATION   // 验证结果
+    }
+
+    public enum TaskStatus {
+        PENDING,       // 等待执行
+        RUNNING,       // 执行中
+        COMPLETED,     // 已完成
+        FAILED,        // 失败
+        SKIPPED        // 跳过
     }
 }

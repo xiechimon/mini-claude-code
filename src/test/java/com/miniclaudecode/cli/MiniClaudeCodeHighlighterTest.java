@@ -10,6 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 class MiniClaudeCodeHighlighterTest {
     private final MiniClaudeCodeHighlighter highlighter = new MiniClaudeCodeHighlighter();
 
+    private static void assertStyled(AttributedString result, int index) {
+        assertNotEquals(AttributedStyle.DEFAULT, result.styleAt(index));
+    }
+
+    private static void assertDefault(AttributedString result, int index) {
+        assertEquals(AttributedStyle.DEFAULT, result.styleAt(index));
+    }
+
     @Test
     void highlightsSlashCommandPrefix() {
         AttributedString result = highlighter.highlight(null, "/model step");
@@ -62,13 +70,5 @@ class MiniClaudeCodeHighlighterTest {
         AttributedString result = highlighter.highlight(null, "");
 
         assertEquals(0, result.length());
-    }
-
-    private static void assertStyled(AttributedString result, int index) {
-        assertNotEquals(AttributedStyle.DEFAULT, result.styleAt(index));
-    }
-
-    private static void assertDefault(AttributedString result, int index) {
-        assertEquals(AttributedStyle.DEFAULT, result.styleAt(index));
     }
 }

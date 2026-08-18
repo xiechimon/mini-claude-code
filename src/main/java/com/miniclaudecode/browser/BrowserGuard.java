@@ -38,60 +38,6 @@ public class BrowserGuard {
         this.sensitivePagePolicy = sensitivePagePolicy;
     }
 
-    /**
-     * 预检浏览器工具调用
-     *
-     * <p>正常执行路径传 {@code false}，工具成功后调用 {@link #applyAfterExecution} 提交状态
-     * {@code true} 仅用于单阶段调用，在允许结果返回前立即记录导航
-     */
-    public BrowserCheckResult check(String toolName, String argsJson, boolean mutateSession) {
-        if (!isChromeTool(toolName)) {
-            return BrowserCheckResult.allow(null);
-        }
-        String localTool = localToolName(toolName);
-        JsonNode args = parseArgs(argsJson);
-        String targetUrl = targetUrl(localTool, args);
-        String effectiveUrl = targetUrl == null ? session.lastNavigatedUrl() : targetUrl;
-        SensitivePagePolicy.MatchResult match = sensitivePagePolicy.match(effectiveUrl);
-        BrowserAuditMetadata metadata = BrowserAuditMetadata.of(session.mode(), match.matched(), effectiveUrl);
-
-        if ("close_page".equals(localTool)
-                && session.mode() == BrowserMode.SHARED
-                && !session.isAgentOpenedTab(pageId(args))) {
-            return BrowserCheckResult.block(
-                    "shared 浏览器模式下拒绝关闭非 Mini Claude Code 创建的标签页，请手动关闭该 Chrome 标签页",
-                    metadata);
-        }
-
-        if (match.matched() && WRITE_TOOLS.contains(localTool)) {
-            return BrowserCheckResult.requireApproval(
-                    "敏感页面命中规则 " + match.pattern() + "，本次浏览器改写操作必须单步审批，不能复用全部放行。",
-                    metadata);
-        }
-
-        if (mutateSession) {
-            applyMutation(localTool, args, targetUrl);
-        }
-        return BrowserCheckResult.allow(metadata);
-    }
-
-    /** 仅在工具成功后提交导航和新标签页状态 */
-    public void applyAfterExecution(String toolName, String argsJson, String result) {
-        if (!isChromeTool(toolName)) {
-            return;
-        }
-        String localTool = localToolName(toolName);
-        JsonNode args = parseArgs(argsJson);
-        applyMutation(localTool, args, targetUrl(localTool, args));
-        if ("new_page".equals(localTool)) {
-            String pageId = pageId(args);
-            if (pageId == null || pageId.isBlank()) {
-                pageId = extractPageId(result);
-            }
-            session.recordOpenedTab(pageId);
-        }
-    }
-
     public static boolean isChromeTool(String toolName) {
         return toolName != null && toolName.startsWith(SERVER_PREFIX);
     }
@@ -134,17 +80,73 @@ public class BrowserGuard {
         return value == null || value.isNull() ? null : value.asText();
     }
 
-    private void applyMutation(String localTool, JsonNode args, String targetUrl) {
-        if (("navigate_page".equals(localTool) || "new_page".equals(localTool)) && targetUrl != null) {
-            session.rememberNavigation(targetUrl);
-        }
-    }
-
     private static String extractPageId(String result) {
         if (result == null) {
             return null;
         }
         Matcher matcher = PAGE_ID_PATTERN.matcher(result);
         return matcher.find() ? matcher.group(1) : null;
+    }
+
+    /**
+     * 预检浏览器工具调用
+     *
+     * <p>正常执行路径传 {@code false}，工具成功后调用 {@link #applyAfterExecution} 提交状态
+     * {@code true} 仅用于单阶段调用，在允许结果返回前立即记录导航
+     */
+    public BrowserCheckResult check(String toolName, String argsJson, boolean mutateSession) {
+        if (!isChromeTool(toolName)) {
+            return BrowserCheckResult.allow(null);
+        }
+        String localTool = localToolName(toolName);
+        JsonNode args = parseArgs(argsJson);
+        String targetUrl = targetUrl(localTool, args);
+        String effectiveUrl = targetUrl == null ? session.lastNavigatedUrl() : targetUrl;
+        SensitivePagePolicy.MatchResult match = sensitivePagePolicy.match(effectiveUrl);
+        BrowserAuditMetadata metadata = BrowserAuditMetadata.of(session.mode(), match.matched(), effectiveUrl);
+
+        if ("close_page".equals(localTool)
+                && session.mode() == BrowserMode.SHARED
+                && !session.isAgentOpenedTab(pageId(args))) {
+            return BrowserCheckResult.block(
+                    "shared 浏览器模式下拒绝关闭非 Mini Claude Code 创建的标签页，请手动关闭该 Chrome 标签页",
+                    metadata);
+        }
+
+        if (match.matched() && WRITE_TOOLS.contains(localTool)) {
+            return BrowserCheckResult.requireApproval(
+                    "敏感页面命中规则 " + match.pattern() + "，本次浏览器改写操作必须单步审批，不能复用全部放行。",
+                    metadata);
+        }
+
+        if (mutateSession) {
+            applyMutation(localTool, args, targetUrl);
+        }
+        return BrowserCheckResult.allow(metadata);
+    }
+
+    /**
+     * 仅在工具成功后提交导航和新标签页状态
+     */
+    public void applyAfterExecution(String toolName, String argsJson, String result) {
+        if (!isChromeTool(toolName)) {
+            return;
+        }
+        String localTool = localToolName(toolName);
+        JsonNode args = parseArgs(argsJson);
+        applyMutation(localTool, args, targetUrl(localTool, args));
+        if ("new_page".equals(localTool)) {
+            String pageId = pageId(args);
+            if (pageId == null || pageId.isBlank()) {
+                pageId = extractPageId(result);
+            }
+            session.recordOpenedTab(pageId);
+        }
+    }
+
+    private void applyMutation(String localTool, JsonNode args, String targetUrl) {
+        if (("navigate_page".equals(localTool) || "new_page".equals(localTool)) && targetUrl != null) {
+            session.rememberNavigation(targetUrl);
+        }
     }
 }

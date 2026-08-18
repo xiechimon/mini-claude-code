@@ -50,28 +50,6 @@ final class MiniClaudeCodeHighlighter implements Highlighter {
     private static final Pattern SECRET_HINT = Pattern.compile(
             "(?i)\\b(api[_-]?key|token|password|secret|authorization|bearer)\\b");
 
-    @Override
-    public AttributedString highlight(LineReader reader, String buffer) {
-        String text = buffer == null ? "" : buffer;
-        if (text.isEmpty()) {
-            return AttributedString.EMPTY;
-        }
-        AttributedStyle[] styles = new AttributedStyle[text.length()];
-        apply(styles, text, AT_REFERENCE, MENTION_STYLE);
-        apply(styles, text, IMAGE_REFERENCE, IMAGE_STYLE);
-        apply(styles, text, SECRET_HINT, SECRET_STYLE);
-        apply(styles, text, DANGEROUS, DANGER_STYLE);
-        apply(styles, text, SLASH_COMMAND, COMMAND_STYLE);
-        markUnclosedDelimiter(styles, text);
-
-        AttributedStringBuilder builder = new AttributedStringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            builder.append(String.valueOf(text.charAt(i)),
-                    styles[i] == null ? AttributedStyle.DEFAULT : styles[i]);
-        }
-        return builder.toAttributedString();
-    }
-
     private static void apply(AttributedStyle[] styles, String text, Pattern pattern, AttributedStyle style) {
         Matcher matcher = pattern.matcher(text);
         while (matcher.find()) {
@@ -123,5 +101,27 @@ final class MiniClaudeCodeHighlighter implements Highlighter {
         int angle = start + "@image:".length();
         int close = text.indexOf('>', angle + 1);
         return close < 0 ? angle : -1;
+    }
+
+    @Override
+    public AttributedString highlight(LineReader reader, String buffer) {
+        String text = buffer == null ? "" : buffer;
+        if (text.isEmpty()) {
+            return AttributedString.EMPTY;
+        }
+        AttributedStyle[] styles = new AttributedStyle[text.length()];
+        apply(styles, text, AT_REFERENCE, MENTION_STYLE);
+        apply(styles, text, IMAGE_REFERENCE, IMAGE_STYLE);
+        apply(styles, text, SECRET_HINT, SECRET_STYLE);
+        apply(styles, text, DANGEROUS, DANGER_STYLE);
+        apply(styles, text, SLASH_COMMAND, COMMAND_STYLE);
+        markUnclosedDelimiter(styles, text);
+
+        AttributedStringBuilder builder = new AttributedStringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            builder.append(String.valueOf(text.charAt(i)),
+                    styles[i] == null ? AttributedStyle.DEFAULT : styles[i]);
+        }
+        return builder.toAttributedString();
     }
 }

@@ -10,6 +10,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BrowserGuardTest {
 
+    private static BrowserSession sharedSession() {
+        BrowserSession session = new BrowserSession();
+        session.switchToShared("http://127.0.0.1:9222");
+        return session;
+    }
+
+    private static BrowserGuard guard(BrowserSession session, Path tempDir) {
+        return new BrowserGuard(session, new SensitivePagePolicy(tempDir.resolve("missing.txt")));
+    }
+
     @Test
     void closePageAllowsAgentOpenedTabInSharedMode(@TempDir Path tempDir) {
         BrowserSession session = sharedSession();
@@ -120,15 +130,5 @@ class BrowserGuardTest {
         BrowserCheckResult result = guard.check("mcp__chrome-devtools__click", "not-json", true);
 
         assertFalse(result.blocked());
-    }
-
-    private static BrowserSession sharedSession() {
-        BrowserSession session = new BrowserSession();
-        session.switchToShared("http://127.0.0.1:9222");
-        return session;
-    }
-
-    private static BrowserGuard guard(BrowserSession session, Path tempDir) {
-        return new BrowserGuard(session, new SensitivePagePolicy(tempDir.resolve("missing.txt")));
     }
 }

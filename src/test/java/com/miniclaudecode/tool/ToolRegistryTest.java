@@ -20,6 +20,24 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolRegistryTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private static McpToolDescriptor stepSearchDescriptor(String name, String schema) throws Exception {
+        JsonNode inputSchema = MAPPER.readTree(schema);
+        return new McpToolDescriptor(
+                "step_search",
+                name,
+                "mcp__step_search__" + name,
+                "StepSearch " + name,
+                inputSchema);
+    }
+
+    private static void restoreSystemProperty(String key, String previous) {
+        if (previous == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, previous);
+        }
+    }
+
     @Test
     void shouldRunCommandInProjectDirectory(@TempDir Path tempDir) {
         ToolRegistry registry = new ToolRegistry();
@@ -272,16 +290,6 @@ class ToolRegistryTest {
         assertEquals("result-second", results.get(1).result());
     }
 
-    private static McpToolDescriptor stepSearchDescriptor(String name, String schema) throws Exception {
-        JsonNode inputSchema = MAPPER.readTree(schema);
-        return new McpToolDescriptor(
-                "step_search",
-                name,
-                "mcp__step_search__" + name,
-                "StepSearch " + name,
-                inputSchema);
-    }
-
     @Test
     void shouldCancelToolInvocationWhenBatchTimeoutIsReached() {
         ToolRegistry registry = new ToolRegistry(1, 1) {
@@ -355,13 +363,5 @@ class ToolRegistryTest {
 
         assertEquals(List.of("global:默认用中文回答"), saved);
         assertTrue(result.contains("长期记忆(global)"));
-    }
-
-    private static void restoreSystemProperty(String key, String previous) {
-        if (previous == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, previous);
-        }
     }
 }

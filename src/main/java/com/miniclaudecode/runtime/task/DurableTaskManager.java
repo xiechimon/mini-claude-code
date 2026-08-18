@@ -68,6 +68,13 @@ public class DurableTaskManager implements Closeable {
         }
     }
 
+    private static Instant parseInstant(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Instant.parse(value);
+    }
+
     public synchronized void start() {
         if (running) {
             return;
@@ -317,13 +324,6 @@ public class DurableTaskManager implements Closeable {
                 parseInstant(rs.getString("finished_at")),
                 rs.getLong("duration_ms")
         );
-    }
-
-    private static Instant parseInstant(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return Instant.parse(value);
     }
 
     @Override

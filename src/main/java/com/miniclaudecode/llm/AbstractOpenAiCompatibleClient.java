@@ -389,8 +389,8 @@ public abstract class AbstractOpenAiCompatibleClient implements LlmClient {
     }
 
     private static final class ToolCallAccumulator {
-        private String id;
         private final StringBuilder name = new StringBuilder();
         private final StringBuilder arguments = new StringBuilder();
+        private String id;
     }
 }

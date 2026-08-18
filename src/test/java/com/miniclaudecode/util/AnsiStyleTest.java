@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AnsiStyleTest {
 
+    private static String stripAnsi(String value) {
+        return value.replaceAll("\u001B\\[[;\\d]*m", "");
+    }
+
     @Test
     void userMessageBlockDoesNotForceWrapWhenContentExactlyFits() {
         String line = AnsiStyle.userMessageBlock("abc", 8);
@@ -23,9 +27,5 @@ class AnsiStyleTest {
         assertEquals(1, block.chars().filter(ch -> ch == '\n').count(), block);
         assertTrue(block.contains("第一行"), block);
         assertTrue(block.contains("第二行"), block);
-    }
-
-    private static String stripAnsi(String value) {
-        return value.replaceAll("\u001B\\[[;\\d]*m", "");
     }
 }

@@ -31,19 +31,6 @@ public final class ToolCallRenderer {
         this.registry = registry;
     }
 
-    public void render(List<LlmClient.ToolCall> toolCalls) {
-        if (toolCalls == null || toolCalls.isEmpty()) {
-            return;
-        }
-        Map<String, List<LlmClient.ToolCall>> grouped = group(toolCalls);
-        String header = collapsedHeader(grouped);
-        List<String> expanded = expandedLines(grouped);
-
-        FoldableBlock block = new FoldableBlock(out, header, expanded);
-        registry.register(block);
-        block.renderInitial();
-    }
-
     static Map<String, List<LlmClient.ToolCall>> group(List<LlmClient.ToolCall> toolCalls) {
         Map<String, List<LlmClient.ToolCall>> grouped = new LinkedHashMap<>();
         for (LlmClient.ToolCall tc : toolCalls) {
@@ -181,5 +168,18 @@ public final class ToolCallRenderer {
                 .replaceFirst("^https?://", "")
                 .replaceFirst("/+$", "");
         return value.length() > 80 ? value.substring(0, 77) + "..." : value;
+    }
+
+    public void render(List<LlmClient.ToolCall> toolCalls) {
+        if (toolCalls == null || toolCalls.isEmpty()) {
+            return;
+        }
+        Map<String, List<LlmClient.ToolCall>> grouped = group(toolCalls);
+        String header = collapsedHeader(grouped);
+        List<String> expanded = expandedLines(grouped);
+
+        FoldableBlock block = new FoldableBlock(out, header, expanded);
+        registry.register(block);
+        block.renderInitial();
     }
 }

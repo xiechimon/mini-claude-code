@@ -33,6 +33,8 @@ import java.util.function.Consumer;
  */
 public class RootPane extends Panel {
 
+    private static final double FILE_TREE_RATIO = 0.25;
+    private static final double STATUS_RATIO = 0.10;
     private final FileTreePane fileTreePane;
     private final CenterPane centerPane;
     private final StatusPane statusPane;
@@ -40,10 +42,6 @@ public class RootPane extends Panel {
     private final LlmClient llmClient;
     private final MiniClaudeCodeConfig config;
     private Consumer<String> messageHandler;
-
-    private static final double FILE_TREE_RATIO = 0.25;
-    private static final double STATUS_RATIO = 0.10;
-
     private boolean fileTreeVisible = true;
 
     public RootPane(MiniClaudeCodeConfig config, LlmClient llmClient) {

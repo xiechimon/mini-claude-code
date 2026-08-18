@@ -38,6 +38,43 @@ public class ProjectMemoryLoader {
         return new ProjectMemoryLoader(Path.of(System.getProperty("user.home"), ".mini-claude-code"), projectRoot);
     }
 
+    private static void addPreferredSource(List<MemorySource> sources, Path directory,
+                                           String preferredName, String legacyName, Path importRoot) {
+        Path preferred = directory.resolve(preferredName);
+        if (Files.isRegularFile(preferred)) {
+            sources.add(new MemorySource(preferred, importRoot));
+            return;
+        }
+        Path legacy = directory.resolve(legacyName);
+        if (Files.isRegularFile(legacy)) {
+            log.warn("Using legacy project memory file {}; rename it to {}", legacy, preferred);
+            sources.add(new MemorySource(legacy, importRoot));
+        }
+    }
+
+    private static String parseImport(String line) {
+        String trimmed = line == null ? "" : line.trim();
+        if (!trimmed.startsWith("@") || trimmed.length() < 2 || trimmed.contains(" ")) {
+            return null;
+        }
+        String path = trimmed.substring(1).trim();
+        if (path.startsWith("/") || path.contains("..")) {
+            return null;
+        }
+        return path;
+    }
+
+    private static String truncateSection(StringBuilder body) {
+        int keep = Math.max(0, MAX_TOTAL_CHARS - 80);
+        String truncated = body.substring(0, Math.min(body.length(), keep)).stripTrailing();
+        return "## Mini Claude Code Project Memory\n\n" + truncated
+                + "\n\n[MCC.md 内容已按 " + MAX_TOTAL_CHARS + " 字符预算截断]";
+    }
+
+    private static String label(Path path) {
+        return path.toAbsolutePath().normalize().toString();
+    }
+
     public String loadForPrompt() {
         List<MemorySource> sources = sources();
         StringBuilder body = new StringBuilder();
@@ -79,20 +116,6 @@ public class ProjectMemoryLoader {
         return sources;
     }
 
-    private static void addPreferredSource(List<MemorySource> sources, Path directory,
-                                           String preferredName, String legacyName, Path importRoot) {
-        Path preferred = directory.resolve(preferredName);
-        if (Files.isRegularFile(preferred)) {
-            sources.add(new MemorySource(preferred, importRoot));
-            return;
-        }
-        Path legacy = directory.resolve(legacyName);
-        if (Files.isRegularFile(legacy)) {
-            log.warn("Using legacy project memory file {}; rename it to {}", legacy, preferred);
-            sources.add(new MemorySource(legacy, importRoot));
-        }
-    }
-
     private String readWithImports(Path file, Path importRoot, Set<Path> importStack, int depth) {
         Path normalized = file.toAbsolutePath().normalize();
         if (depth > MAX_IMPORT_DEPTH) {
@@ -129,29 +152,6 @@ public class ProjectMemoryLoader {
         } finally {
             importStack.remove(normalized);
         }
-    }
-
-    private static String parseImport(String line) {
-        String trimmed = line == null ? "" : line.trim();
-        if (!trimmed.startsWith("@") || trimmed.length() < 2 || trimmed.contains(" ")) {
-            return null;
-        }
-        String path = trimmed.substring(1).trim();
-        if (path.startsWith("/") || path.contains("..")) {
-            return null;
-        }
-        return path;
-    }
-
-    private static String truncateSection(StringBuilder body) {
-        int keep = Math.max(0, MAX_TOTAL_CHARS - 80);
-        String truncated = body.substring(0, Math.min(body.length(), keep)).stripTrailing();
-        return "## Mini Claude Code Project Memory\n\n" + truncated
-                + "\n\n[MCC.md 内容已按 " + MAX_TOTAL_CHARS + " 字符预算截断]";
-    }
-
-    private static String label(Path path) {
-        return path.toAbsolutePath().normalize().toString();
     }
 
     private record MemorySource(Path path, Path importRoot) {

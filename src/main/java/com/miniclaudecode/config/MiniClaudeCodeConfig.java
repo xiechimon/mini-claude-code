@@ -27,104 +27,6 @@ public class MiniClaudeCodeConfig {
     private String defaultProvider = "glm";
     private Map<String, ProviderConfig> providers = new LinkedHashMap<>();
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class ProviderConfig {
-        private String apiKey;
-        private String baseUrl;
-        private String model;
-        private double temperature = 0.7;  // 默认温度
-        private int maxTokens = 8192;      // 默认最大 token 数
-
-        public ProviderConfig() {
-        }
-
-        public ProviderConfig(String apiKey, String baseUrl, String model) {
-            this.apiKey = apiKey;
-            this.baseUrl = baseUrl;
-            this.model = model;
-        }
-
-        public String getApiKey() {
-            return apiKey;
-        }
-
-        public void setApiKey(String apiKey) {
-            this.apiKey = apiKey;
-        }
-
-        public String getBaseUrl() {
-            return baseUrl;
-        }
-
-        public void setBaseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
-        }
-
-        public String getModel() {
-            return model;
-        }
-
-        public void setModel(String model) {
-            this.model = model;
-        }
-
-        public double getTemperature() {
-            return temperature;
-        }
-
-        public void setTemperature(double temperature) {
-            this.temperature = temperature;
-        }
-
-        public int getMaxTokens() {
-            return maxTokens;
-        }
-
-        public void setMaxTokens(int maxTokens) {
-            this.maxTokens = maxTokens;
-        }
-    }
-
-    public String getDefaultProvider() {
-        return defaultProvider;
-    }
-
-    public void setDefaultProvider(String defaultProvider) {
-        this.defaultProvider = defaultProvider;
-    }
-
-    public Map<String, ProviderConfig> getProviders() {
-        return providers;
-    }
-
-    public void setProviders(Map<String, ProviderConfig> providers) {
-        this.providers = providers;
-    }
-
-    public String getApiKey(String provider) {
-        ProviderConfig providerConfig = providers.get(provider);
-        if (providerConfig != null && providerConfig.getApiKey() != null && !providerConfig.getApiKey().isBlank()) {
-            return providerConfig.getApiKey();
-        }
-        return loadApiKeyFromEnv(provider);
-    }
-
-    public String getModel(String provider) {
-        ProviderConfig providerConfig = providers.get(provider);
-        if (providerConfig != null && providerConfig.getModel() != null && !providerConfig.getModel().isBlank()) {
-            return providerConfig.getModel();
-        }
-        return loadModelFromEnv(provider);
-    }
-
-    public String getBaseUrl(String provider) {
-        ProviderConfig providerConfig = providers.get(provider);
-        if (providerConfig != null && providerConfig.getBaseUrl() != null && !providerConfig.getBaseUrl().isBlank()) {
-            return providerConfig.getBaseUrl();
-        }
-        return loadBaseUrlFromEnv(provider);
-    }
-
     public static MiniClaudeCodeConfig load() {
         if (Files.exists(CONFIG_FILE)) {
             try {
@@ -134,15 +36,6 @@ public class MiniClaudeCodeConfig {
             }
         }
         return new MiniClaudeCodeConfig();
-    }
-
-    public void save() {
-        try {
-            Files.createDirectories(CONFIG_DIR);
-            mapper.writeValue(CONFIG_FILE.toFile(), this);
-        } catch (IOException e) {
-            System.err.println("⚠️ 配置保存失败: " + e.getMessage());
-        }
     }
 
     private static String loadModelFromEnv(String provider) {
@@ -259,5 +152,112 @@ public class MiniClaudeCodeConfig {
             }
         }
         return null;
+    }
+
+    public String getDefaultProvider() {
+        return defaultProvider;
+    }
+
+    public void setDefaultProvider(String defaultProvider) {
+        this.defaultProvider = defaultProvider;
+    }
+
+    public Map<String, ProviderConfig> getProviders() {
+        return providers;
+    }
+
+    public void setProviders(Map<String, ProviderConfig> providers) {
+        this.providers = providers;
+    }
+
+    public String getApiKey(String provider) {
+        ProviderConfig providerConfig = providers.get(provider);
+        if (providerConfig != null && providerConfig.getApiKey() != null && !providerConfig.getApiKey().isBlank()) {
+            return providerConfig.getApiKey();
+        }
+        return loadApiKeyFromEnv(provider);
+    }
+
+    public String getModel(String provider) {
+        ProviderConfig providerConfig = providers.get(provider);
+        if (providerConfig != null && providerConfig.getModel() != null && !providerConfig.getModel().isBlank()) {
+            return providerConfig.getModel();
+        }
+        return loadModelFromEnv(provider);
+    }
+
+    public String getBaseUrl(String provider) {
+        ProviderConfig providerConfig = providers.get(provider);
+        if (providerConfig != null && providerConfig.getBaseUrl() != null && !providerConfig.getBaseUrl().isBlank()) {
+            return providerConfig.getBaseUrl();
+        }
+        return loadBaseUrlFromEnv(provider);
+    }
+
+    public void save() {
+        try {
+            Files.createDirectories(CONFIG_DIR);
+            mapper.writeValue(CONFIG_FILE.toFile(), this);
+        } catch (IOException e) {
+            System.err.println("⚠️ 配置保存失败: " + e.getMessage());
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ProviderConfig {
+        private String apiKey;
+        private String baseUrl;
+        private String model;
+        private double temperature = 0.7;  // 默认温度
+        private int maxTokens = 8192;      // 默认最大 token 数
+
+        public ProviderConfig() {
+        }
+
+        public ProviderConfig(String apiKey, String baseUrl, String model) {
+            this.apiKey = apiKey;
+            this.baseUrl = baseUrl;
+            this.model = model;
+        }
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model;
+        }
+
+        public double getTemperature() {
+            return temperature;
+        }
+
+        public void setTemperature(double temperature) {
+            this.temperature = temperature;
+        }
+
+        public int getMaxTokens() {
+            return maxTokens;
+        }
+
+        public void setMaxTokens(int maxTokens) {
+            this.maxTokens = maxTokens;
+        }
     }
 }
