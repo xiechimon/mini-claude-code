@@ -1,118 +1,177 @@
-# CLAUDE.md
+# Mini Claude Code · Agent Guide
 
-## 学习循环 📖
+这是编码 Agent 进入仓库后的首读文件。实现细节按需查 [docs/agents-reference.md](docs/agents-reference.md)
+，文档索引见 [docs/README.md](docs/README.md)。
 
-本项目是 **学习项目**：通过手写一个 Java 版简易 Claude Code 来掌握 coding agent
-的构造。参考课程 <https://github.com/shareAI-lab/learn-claude-code>（Python 实现，17 课递进，s01 → s17）。
+信息优先级：代码实际行为 > 本文件 > `MCC.md` > `README.md` > `ROADMAP.md`。Roadmap 只表示方向，不证明功能已经交付。
 
-**代码是副产品，学习效果才是目标。** 主判据是**能造出一个真能跑的 agent harness**，一切流程决策以此为准，不以「多快写完」为准。
+## 项目定位
 
-项目终局是**一次性学习脚手架**，不是长期自用工具 —— 不投入配置系统、错误恢复、跨平台、性能这类与理解底层无关的工程量。
+- Mini Claude Code 是我的 Java Agent CLI 学习项目，非商业产品。
+- 目标是保留 Agent 核心机制的可读性：ReAct、Plan、Multi-Agent、工具、上下文、MCP、终端和安全边界都能在仓库里追到。
+- Java 17，包根 `com.miniclaudecode`，本机 Maven，仓库不带 Maven Wrapper。
+- Banner 版本是 `v16.1.0`；Maven artifact 是 `mini-claude-code-1.0-SNAPSHOT.jar`，目前允许不同步。
+- `MCC.md` 是程序启动时注入的项目记忆；个人或会变化的事实通过 `/save` 管理。
 
-### 基准来源 🎯
+## 开发入口
 
-**功能基准是 Claude Code 的契约（`@anthropic-ai/claude-agent-sdk` 的 `.d.ts` + 官方文档），不是课程的实现。**
-课程 `code.py` 是参考解法，官网不作基准。三层基准的取用方法与每课的 7 步循环见 `/lesson-loop`。
-
-### 契约对齐约束 ⛔
-
-- **17 课全做**，含 s15 Integrated Harness —— 它约三成内容是 s01–s14 单独做长不出来的：并发、租约、投递保证、信任边界、
-  流水线顺序。
-- **名全录、行为按需** —— 契约里的枚举值和事件名**全部**录进类型，哪怕没有实现（成本只是一个 enum）；行为实现按端到端场景
-  裁剪，未实现的显式标记。这样「没实现」是待办，不是遗漏。
-- **卡住时分层降级** —— 先完成名全录、读懂、复盘，实现挂起并标记，继续下一课。能力面不留洞，留洞的只是实现深度。
-- 不逐行翻译 Python；优先采用自然、类型安全、可维护的 Java 表达。
-- 「最小改动」只表示不实现后续课次功能，不表示删减当前课契约。
-
-### 沉淀去处
-
-| 内容                   | 去处                                                  |
-|------------------------|-------------------------------------------------------|
-| 流程与规则             | 本文件                                                |
-| 领域术语               | `CONTEXT.md`                                          |
-| 难以逆转的决策及其理由 | `docs/adr/`                                           |
-| 每课 diff 复盘         | `.scratch/nano-agent/issues/NN-*.md` 的 `## Comments` |
-
-仅当复盘结论构成硬决策时，才从票中提炼为 ADR。 **不要每课都写 ADR。**
-
-## 输出规范 📝
-
-中文回复，先给结论和方案，言简意赅，不输出无价值 commentary。
-
-## 动手前 🔍
-
-- 回归第一性原理：先明确任务真正要解决的问题，拆成最小可验证单元，不照搬惯例。
-- 改代码前必须能回答：问题真实存在吗？复现了吗？根因找到了吗？项目里已有实现吗？生态里有成熟方案吗？改动是最小必要范围吗？
-- 答不上就继续分析，不动手。
-- 实现前检索 GitHub / npm / PyPI 等生态与官方文档，成熟方案优先，不重复造轮子。
-
-## 改代码 💻
-
-- 冲突时正确性和根因修复优先于速度和改动量。
-- 仅实现必要功能，不过度设计，不顺手重构。
-- 先做端到端可运行的最小版本，再演进。
-- 不主动追求向后兼容：废弃路径直接删；保留兼容层必须写明理由。
-- 代码检索优先用 CodeGraph，禁止无目的读全文件、批量加载无关上下文。
-- 关键技术决策必须说明「为什么」。
-
-### Java 注释
-
-- 每个顶层类型（含测试类）加简洁中文 Javadoc，聚焦职责、边界或设计原因。
-- public 方法与接口方法加中文 Javadoc 描述契约，配齐 `@param` / `@return` / `@throws`。
-- 私有方法、字段、方法体注释默认不写；仅在命名和结构无法表达设计原因、边界或副作用时补充。
-
-## Bug 分析 🐛
-
-复现 → 验证根因 → 最小精准修复。禁止猜测式修改和试错堆补丁。
-
-结论格式：无问题输出 `✅OK`；有问题给出「原因 + 验证依据 + 最小修复方案」。
-
-## Fallback 原则 🛡️
-
-仅用于明确设计的业务容错、网络异常、外部 API 边界。
-
-禁止用 fallback / 默认值 / catch 掩盖主流程异常、数据错误和未知问题 —— 错误必须暴露，且有日志可观测。
-
-## 验证原则 ✅
-
-三者分工，不混用：
-
-- **契约核对** 定「做什么」—— 对着 `.d.ts` 逐项确认枚举值和事件名已全部录入，未实现的显式标记。
-- **端到端场景** 定「做完了」—— JUnit 加写死的假模型响应，可重跑。假响应能精确构造自然触发不了的场景：撑爆上下文、
-  等定时器、等后台进程结束。s13 Agent Teams、s16 Workflow 这类响应序列过于复杂的课，降级为交互跑加结论写票。
-- **单元测试** 只保护真会写错的边界逻辑（如 `Workspace` 的 realpath 解析），**不给每个类补测试**。
-
-不为简单修改跑全量测试，不为形式加无价值测试。
-
-## Plan Mode / Subagent / Skill 🤖
-
-简单修改直接执行；多文件修改、架构调整、复杂分析才用 Plan Mode 或 Subagent。
-
-Skill 无明确收益不调用。`mattpocock-skills` 用于类型建模与接口契约设计。
-
-## Git 提交规范 📦
-
-Conventional Commits，中文祈使句，不加句号：
-
-```text
-<type>(<scope>): <中文描述>
+```bash
+cp .env.example .env
+mvn clean compile exec:java -Dexec.mainClass="com.miniclaudecode.cli.Main"
+mvn clean package
+java -jar target/mini-claude-code-1.0-SNAPSHOT.jar
 ```
 
-type：`feat` / `fix` / `docs` / `refactor` / `test` / `chore`；scope 可省略。
+前提：JDK 17、Maven、至少一个受支持 provider 的 API Key；`ripgrep` 可选。编译、测试和调试统一走 `mvn`，`java -jar` 只用于打包产物验收。
 
-scope 仅表示项目中长期稳定的功能范围，例如 `desktop`、`sdk`、`mcp`。课程编号、issue 编号、迭代名称不得作为 scope，也不应为了标识
-进度写入 subject。没有明确功能范围时省略 scope，subject 只描述实际代码或文档变化。
+## 代码导航
 
-默认只写 subject 一行。不加 body（除非改动原因无法从 diff 看出）、不加 `Co-Authored-By` 等 trailer、不加额外 commentary。
+仓库存在 `.codegraph/` 时，定位代码和理解调用链先用：
 
-## 工具链约定 🔧
+```bash
+codegraph explore "<符号或问题>"
+```
 
-本机 `java` 为 JDK 26，Maven 运行在 JDK 21。 **一律用 `mvn` 编译与运行，不使用裸 `java` 命令**，避免编译期与运行期版本不一致。详见
-`docs/adr/0001-技术栈-java21-maven-官方sdk.md`。
+CodeGraph 无结果或只需精确文本匹配时再用 `rg`。避免无目标地通读大文件。
 
-## Agent skills 🧩
+| 任务           | 首选入口                                                  |
+|----------------|-----------------------------------------------------------|
+| CLI 命令       | `cli/Main.java`、`cli/CliCommandParser.java`              |
+| ReAct          | `agent/Agent.java`                                        |
+| Plan / DAG     | `agent/PlanExecuteAgent.java`、`plan/`                    |
+| Multi-Agent    | `agent/AgentOrchestrator.java`、`agent/SubAgent.java`     |
+| 工具           | `tool/ToolRegistry.java`                                  |
+| 模型           | `llm/*Client.java`、`llm/LlmClientFactory.java`           |
+| Memory         | `memory/MemoryManager.java`、`memory/LongTermMemory.java` |
+| MCP            | `mcp/McpServerManager.java`、`mcp/McpClient.java`         |
+| 策略与审批     | `policy/`、`hitl/`                                        |
+| 终端           | `render/`、`cli/Main.java`                                |
+| RAG / LSP      | `rag/`、`lsp/`                                            |
+| Runtime / 微信 | `runtime/`、`wechat/`                                     |
+
+## 架构不变量
+
+三条执行路径共享 `ToolRegistry`、`MemoryManager` 和 `SnapshotService`：
+
+| 路径             | 入口                | 触发     |
+|------------------|---------------------|----------|
+| ReAct            | `Agent`             | 普通输入 |
+| Plan-and-Execute | `PlanExecuteAgent`  | `/plan`  |
+| Multi-Agent      | `AgentOrchestrator` | `/team`  |
+
+内置工具：`read_file`、`write_file`、`list_dir`、`glob_files`、`grep_code`、`execute_command`、`create_project`、`search_code`、
+`web_search`、`web_fetch`、`revert_turn`。MCP 工具统一命名为 `mcp__{server}__{tool}`。
+
+新增共享能力时，优先放在三条路径共同依赖的层；不要只给某一种模式写旁路。
+
+## 关键行为
+
+### 代码检索
+
+- 精确定位：`glob_files` → `grep_code` → `read_file`。
+- `grep_code` 优先 ripgrep，缺失时回退 Java 扫描；返回 `partial` 或 `suggested_reads` 时继续缩小范围。
+- `search_code` 只处理模糊语义、关键词不清或普通搜索无果的场景。
+
+### Memory 与上下文
+
+- 长期记忆只在 `/save` 或用户明确要求保存时写入，只保存跨会话稳定事实。
+- 默认使用 project scope；跨项目偏好才使用 global。
+- `MCC.md` 放可提交、长期稳定的项目规则；一次性任务不写入。
+- short-term memory 压缩与 conversation history 压缩是两条链路；真正防止请求超过窗口的是后者。
+- `/clear` 清当前会话、短期记忆和待注入 Skill buffer，保留长期记忆；`/compact` 只压缩当前 ReAct history。
+
+### 工具、安全与并发
+
+- 拦截顺序：`HitlToolRegistry` → `ToolRegistry` → `PathGuard` / `CommandGuard`。
+- 策略拒绝不能被用户审批绕过；文件路径必须留在项目根内。
+- 三条执行路径都调用 `executeTools()`；默认最多 4 个并发，结果保持原 tool call 顺序。
+- 微信通道没有审批面板：只读工具默认允许，命令和 MCP 必须命中白名单，`revert_turn` 与浏览器会话切换默认拒绝。
+
+### Web、Browser 与 MCP
+
+- 本地“当前项目 / 文件 / README / 代码”问题使用本地代码工具，不发起联网搜索。
+- 已知 URL 先 `web_fetch`；SPA、反爬或登录页再使用 Chrome DevTools MCP。
+- 浏览器读取优先 `take_snapshot`；公开页面不提前切 shared 模式。
+- shared 模式下，敏感页面改写操作必须单步审批，`close_page` 只能关闭本会话创建的 tab。
+- MCP 合并用户级和项目级配置；server 全程后台启动，慢 server 保持 `STARTING`，不能阻塞 Logo 和首个输入提示。
+
+### Prompt 与 Skill
+
+- Prompt 由 `PromptAssembler` 分层组装；内置模板位于 `src/main/resources/prompts/`。
+- Skill 索引最多 20 个 / 4KB；`load_skill` 将正文写入 `SkillContextBuffer`，下一轮 user message 前置注入。
+- 修改工具集时同步 ReAct、Plan、SubAgent 和必要的 Planner prompt。
+
+### 终端
+
+- 交互主路径输出走 `Renderer.stream()`；只有 fatal bootstrap、Runtime API 和 legacy 降级路径可以直接写 stdout。
+- 启动时尽早建立 `Terminal → LineReader → Renderer`。
+- `BottomStatusBar` 由 JLine `Status` 管理；不手写绝对光标定位或用 `CLEAR_TO_EOS` 覆盖 transcript。
+- live thinking 区只清理自己打印的行。
+- 提交输入以 `>` 独立行回写，不添加整行背景；不能依赖 JLine accept 后残留的编辑行。
+- `ctx` 是下一轮仍会携带的上下文估算；`in/out/cache` 是最近调用统计。
+
+Provider、配置优先级、JLine 和各模块的详细边界见 [docs/agents-reference.md](docs/agents-reference.md)。
+
+## 改动联动
+
+行为变化必须同步本文件和 `README.md`；只有交付状态变化才改 `ROADMAP.md`。
+
+| 改动面          | 必须一起检查                                                  |
+|-----------------|---------------------------------------------------------------|
+| CLI 命令        | `Main.java`、`CliCommandParser.java`、测试、README、本文件    |
+| Plan 审阅       | `Main.java`、`PlanReviewInputParser.java`、测试、手工终端路径 |
+| 工具            | `ToolRegistry.java`、三条执行路径的 prompt、文档              |
+| Provider        | 对应 Client、`LlmClientFactory.java`、`.env.example`、文档    |
+| Embedding / RAG | `EmbeddingClient`、`VectorStore`、配置、文档                  |
+| Web / Browser   | `web/`、`browser/`、ToolRegistry、策略、测试、文档            |
+| Memory          | `MemoryManager`、`LongTermMemory`、`TokenBudget`、测试、文档  |
+| HITL / 策略     | `policy/`、ToolRegistry、HitlToolRegistry、prompt、配置、测试 |
+| MCP             | `mcp/`、ToolRegistry、HITL、AuditLog、prompt、测试、文档      |
+
+未知 `/xxx` 必须在 CLI 层报告“未知命令”，不能回退给 Agent。
+
+## 验证
+
+```bash
+# 常规
+mvn test -Pquick
+
+# 终端
+mvn test -Pphase16-smoke
+
+# 单组测试
+mvn test -Dtest=XxxTest -DskipTests=false
+
+# 全量
+mvn test -DskipTests=false
+```
+
+| 场景        | 聚焦测试                                                                    |
+|-------------|-----------------------------------------------------------------------------|
+| 搜索工具    | `ToolRegistryTest,CodeSearchGoldenSetTest,ApprovalPolicyTest`               |
+| 命令解析    | `CliCommandParserTest,PlanReviewInputParserTest,MainInputNormalizationTest` |
+| DAG / Plan  | `ExecutionPlanTest`                                                         |
+| Multi-Agent | `AgentRoleTest,AgentMessageTest,AgentOrchestratorTest`                      |
+| RAG         | `CodeChunkerTest,CodeAnalyzerTest,VectorStoreTest,CodeIndexTest`            |
+
+用最小可重复路径证明修改；终端交互无法自动化时，把手工证据补进对应文档。
+
+## Agent skills
 
 - **Issue tracker** —— issues 与 spec 以 markdown 存放在 `.scratch/<feature-slug>/`。见 `docs/agents/issue-tracker.md`。
 - **Triage labels** —— 沿用五个规范角色的默认标签（needs-triage / needs-info / ready-for-agent / ready-for-human /
   wontfix）。见 `docs/agents/triage-labels.md`。
 - **Domain docs** —— single-context：根目录 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+
+## 工作约定
+
+- 先复现和定位责任层，再改代码；保持补丁聚焦，不顺手重构。
+- 代码可读性优先于抽象数量；关键技术决策说明原因。
+- Java 注释使用简洁中文且句尾不写 `。`，只解释设计原因、不变量、协议限制、安全边界和反直觉兼容行为
+- 跨模块接口、复杂顶层类型、协议边界和有非显然副作用的方法写 Javadoc；简单 record、enum、getter、构造器和自解释测试免写
+- `@param` / `@return` / `@throws` 只补充名称无法表达的约束；阶段历史写进 `docs/`，代码 TODO 必须写明触发条件和完成标准
+- 错误应可观察。fallback 只用于明确的业务容错或外部系统边界，不能掩盖主流程异常。
+- 保留用户已有改动；不提交 `.env`、真实 API Key 或 `target/`。
+- Commit 使用 Conventional Commits，中文祈使句；不添加 AI co-author trailer。
+
+稳定规则写入本文件，模块细节写入 `docs/agents-reference.md`，历史方案写入对应 `docs/` 设计记录。
