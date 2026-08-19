@@ -595,6 +595,15 @@ java -jar target/mini-claude-code-1.0-SNAPSHOT.jar
 
 **通过判定**：折叠块可展开/收起 + 摘要行出现且单行。若工具调用仍打印为多行展开列表（无 `⏵` 前缀），说明渲染器未注入 plan 工厂。
 
+**2026-08-19 实测**（iTerm2 / macOS）：✅ 通过。
+
+- 每个任务迭代出现单行折叠态：`⏵ 联网搜索 2 次 (ctrl+o to expand)`、`⏵ 抓取 2 个网页 (ctrl+o to expand)`、`⏵ 2 组工具调用 / 2 次 (ctrl+o to expand)`（混合批次的折叠头）——多行展开列表没有再出现
+- 摘要行全部出现且单行，位置在折叠块后、任务正文前：
+  - `→ ⚠️ 智谱 Web Search 未配置 API Key。...`（失败路径也压成单行，符合预期）
+  - `→ 抓取 openjdk.org/projects/loom/ 完成: OpenJDK: Loom · 正文 916 字符`
+  - `→ 抓取 wiki.openjdk.org/display/loom/Main 完成: Main - Loom - OpenJDK Wiki · 正文 4072 字符`
+- 意外发现（非本次回归目标）：`grep_code` 的表格输出在任务思考渲染中列宽错位（`.env` 检查那段表格交叠），属 LSP/工具表格渲染的既有问题，建议另开 issue
+
 ---
 
 ## 29. /team 并行 step 顺序重放时摘要行位置（40d2d65 回归）
