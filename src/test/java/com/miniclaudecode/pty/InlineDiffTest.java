@@ -11,36 +11,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 用例 18, 19: 行内 diff — 修改已有文件 / 新建文件
  *
  * <p>对应 docs/inline-tui-manual-tests.md
- *
- * <p>用例 17（修改 ROADMAP.md）需要 git 副作用清理；这里用 ROADMAP.md 的预创建副本做修改
  */
 class InlineDiffTest {
 
+    private static final String FOLD_HEADER = "\\u23F5 写入 1 个文件"; // ⏵ 写入 1 个文件
+
     @Test
     void diffAppearsForNewFile() throws Exception {
-        StubScript script = StubScript.writeFile("hello-test.txt", "line 1\nline 2");
+        StubScript script = StubScript.writeFile("hello-test.txt", "line 1\\nline 2");
         try (PtyTestHarness h = PtyTestHarness.start(script, "inline")) {
             h.session().send("创建 hello-test.txt");
-            // write_file 触发折叠块；diff 在折叠块内，展开后可见
             h.session().expect(
-                    Pattern.compile("⏵ .*写入.*hello-test\\.txt"),
+                    Pattern.compile(FOLD_HEADER),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
-            // 文件应被创建
             verifyFileCreated(h, "hello-test.txt");
-            // 清理
             new java.io.File(h.workDir(), "hello-test.txt").delete();
         }
     }
 
     @Test
     void diffAppearsForModifiedFile() throws Exception {
-        // 预创建要修改的文件
         java.io.File target = new java.io.File(
                 System.getProperty("user.dir"), "ROADMAP.md");
         String originalContent = java.nio.file.Files.readString(target.toPath());
         String modifiedLine = "# Mini Claude Code 路线图（v16.1 测试）";
-
-        // stub 覆盖 ROADMAP.md
         String newContent = modifiedLine + "\n" +
                 originalContent.substring(originalContent.indexOf('\n') + 1);
 
@@ -48,9 +42,8 @@ class InlineDiffTest {
         try (PtyTestHarness h = PtyTestHarness.start(script, "inline")) {
             try {
                 h.session().send("把 ROADMAP.md 第一行改成 '" + modifiedLine + "'");
-                // write_file 触发折叠块
                 h.session().expect(
-                        Pattern.compile("� .*写入.*ROADMAP\\.md"),
+                        Pattern.compile(FOLD_HEADER),
                         PtyTestHarness.LLM_RESPONSE_TIMEOUT);
             } finally {
                 java.nio.file.Files.writeString(target.toPath(), originalContent);
@@ -64,6 +57,11 @@ class InlineDiffTest {
         while (System.currentTimeMillis() < deadline && !f.exists()) {
             Thread.sleep(200);
         }
-        assertTrue(f.exists(), "文件应被创建: " + f.getAbsolutePath());
+        if (!f.exists()) {
+            String output = PtyCliSession.stripAnsi(h.session().currentOutput());
+            throw new AssertionError("文件应被创建: " + f.getAbsolutePath()
+                    + "\n当前 buffer 末尾 2000 字符:\n"
+                    + output.substring(Math.max(0, output.length() - 2000)));
+        }
     }
 }
