@@ -23,9 +23,9 @@ import com.miniclaudecode.skill.SkillIndexFormatter;
 import com.miniclaudecode.skill.SkillRegistry;
 import com.miniclaudecode.tool.ToolRegistry;
 import com.miniclaudecode.tool.ToolRegistry.ToolExecutionResult;
-import com.miniclaudecode.tool.ToolRegistry.ToolInvocation;
 import com.miniclaudecode.util.AnsiStyle;
 import com.miniclaudecode.util.TerminalMarkdownRenderer;
+import com.miniclaudecode.util.TextPreview;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -226,12 +226,14 @@ public class Agent {
                     streamRenderer.resetBetweenIterations();
                     renderer().appendToolCalls(response.toolCalls());
 
-                    List<ToolExecutionResult> toolResults = executeToolCalls(response.toolCalls(), iteration);
+                    List<ToolExecutionResult> toolResults = ToolCallRunner.execute(
+                            log, "iteration=" + iteration, toolRegistry, response.toolCalls(),
+                            this::emitToolResultSummary);
                     for (ToolExecutionResult toolResult : toolResults) {
                         memoryManager.addToolResult(toolResult.name(), toolResult.result());
                         conversationHistory.add(LlmClient.Message.tool(toolResult.id(), toolResult.result()));
                     }
-                    appendImageToolMessages(toolResults);
+                    ToolCallRunner.appendImageMessages(conversationHistory, toolResults);
                     pushStatus(budget, startNanos, "running");
 
                     continue;
@@ -250,7 +252,7 @@ public class Agent {
                         response.reasoningContent() == null ? 0 : response.reasoningContent().length(),
                         response.content() == null ? 0 : response.content().length());
                 if (log.isDebugEnabled()) {
-                    log.debug("Assistant answer preview: {}", preview(response.content(), 500));
+                    log.debug("Assistant answer preview: {}", TextPreview.of(response.content(), 500));
                 }
 
                 if (streamRenderer.hasStreamedOutput()) {
@@ -630,27 +632,6 @@ public class Agent {
         reasoningTranscript.append(reasoningContent.trim());
     }
 
-    private List<ToolExecutionResult> executeToolCalls(List<LlmClient.ToolCall> toolCalls, int iteration) {
-        List<ToolInvocation> invocations = new ArrayList<>();
-        for (LlmClient.ToolCall toolCall : toolCalls) {
-            String toolName = toolCall.function().name();
-            String toolArgs = toolCall.function().arguments();
-            log.info("Scheduling tool: {} (iteration={})", toolName, iteration);
-            log.debug("Tool args [{}]: {}", toolName, toolArgs);
-            invocations.add(new ToolInvocation(toolCall.id(), toolName, toolArgs));
-        }
-
-        if (invocations.size() > 1) {
-            log.info("Executing {} tool calls in parallel (iteration={})", invocations.size(), iteration);
-        }
-        List<ToolExecutionResult> results = toolRegistry.executeTools(invocations);
-        for (ToolExecutionResult result : results) {
-            log.debug("Tool result preview [{}]: {}", result.name(), preview(result.result(), 300));
-            emitToolResultSummary(result);
-        }
-        return results;
-    }
-
     private void emitToolResultSummary(ToolExecutionResult result) {
         if (result == null || result.name() == null) {
             return;
@@ -740,21 +721,6 @@ public class Agent {
         return value.length() > maxLength ? value.substring(0, Math.max(0, maxLength - 3)) + "..." : value;
     }
 
-    private void appendImageToolMessages(List<ToolExecutionResult> toolResults) {
-        if (toolResults == null || toolResults.isEmpty()) {
-            return;
-        }
-        for (ToolExecutionResult result : toolResults) {
-            if (!result.hasImageParts()) {
-                continue;
-            }
-            List<LlmClient.ContentPart> parts = new ArrayList<>();
-            parts.add(LlmClient.ContentPart.text("工具 " + result.name() + " 返回了图片内容，请结合上面的工具文本结果分析。"));
-            parts.addAll(result.imageParts());
-            conversationHistory.add(LlmClient.Message.user(parts));
-        }
-    }
-
     private String formatUserFacingResponse(String reasoningContent, String answer) {
         String normalizedReasoning = reasoningContent == null ? "" : reasoningContent.trim();
         String normalizedAnswer = answer == null ? "" : answer.trim();
@@ -766,17 +732,6 @@ public class Agent {
             return "🧠 思考过程:\n" + normalizedReasoning;
         }
         return "🧠 思考过程:\n" + normalizedReasoning + "\n\n▪ " + normalizedAnswer;
-    }
-
-    private String preview(String content, int maxLength) {
-        if (content == null) {
-            return "";
-        }
-        String normalized = content.replace("\r\n", "\n").replace('\r', '\n');
-        if (normalized.length() <= maxLength) {
-            return normalized;
-        }
-        return normalized.substring(0, maxLength) + "...";
     }
 
     public record CompactionResult(boolean compacted, long beforeTokens, long afterTokens, String error) {

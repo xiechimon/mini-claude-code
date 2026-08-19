@@ -157,6 +157,10 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 - `executeTools()` 固定线程池并行，默认最多 4 个并发
 - 返回结果保持原始顺序
 - Agent/PlanExecuteAgent/SubAgent 三条路径都走 executeTools ()
+- 三条路径不直接调 `executeTools()`，统一经 `agent/ToolCallRunner.execute()`：翻译 ToolInvocation、统一
+  `[scope]` 日志口径（scope 依次是 `iteration=N` / `task <id>` / 子 agent 名）、按原顺序回调 `onResult`。ReAct 用
+  `onResult` 挂 `emitToolResultSummary()`，另两条传 null
+- 返回图片的工具结果统一由 `ToolCallRunner.appendImageMessages()` 补成一条 user message
 
 ### Web
 
@@ -201,6 +205,9 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 ### 终端渲染
 
 - 三个实现：InlineRenderer (默认) / LanternaRenderer / PlainRenderer
+- 工具调用文案唯一来源是 `render/ToolCallLabels`：`toolLabel()` / `extractKeyParam()` / `group()` /
+  `expandedLines()` / `printExpanded()`。PlainRenderer、InlineRenderer 的折叠块和 Plan / SubAgent 的
+  `PrintStream` 直写路径共用同一份，改文案只改这一处
 - 环境变量：`MINI_CLAUDE_CODE_RENDERER=inline|lanterna|plain`
 - `MINI_CLAUDE_CODE_TUI=true`(旧) → lanterna + deprecation 提示
 - `MINI_CLAUDE_CODE_NO_STATUSBAR=true`：禁用底部状态栏

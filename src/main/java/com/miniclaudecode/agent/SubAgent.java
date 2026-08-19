@@ -1,7 +1,5 @@
 package com.miniclaudecode.agent;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.miniclaudecode.context.ContextProfile;
 import com.miniclaudecode.image.ImageReferenceParser;
 import com.miniclaudecode.llm.LlmClient;
@@ -12,12 +10,12 @@ import com.miniclaudecode.prompt.ProjectMemoryLoader;
 import com.miniclaudecode.prompt.PromptAssembler;
 import com.miniclaudecode.prompt.PromptContext;
 import com.miniclaudecode.prompt.PromptMode;
+import com.miniclaudecode.render.ToolCallLabels;
 import com.miniclaudecode.skill.SkillContextBuffer;
 import com.miniclaudecode.skill.SkillIndexFormatter;
 import com.miniclaudecode.skill.SkillRegistry;
 import com.miniclaudecode.tool.ToolRegistry;
 import com.miniclaudecode.tool.ToolRegistry.ToolExecutionResult;
-import com.miniclaudecode.tool.ToolRegistry.ToolInvocation;
 import com.miniclaudecode.util.AnsiStyle;
 import com.miniclaudecode.util.TerminalMarkdownRenderer;
 import org.slf4j.Logger;
@@ -27,9 +25,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -40,7 +36,6 @@ import java.util.function.Supplier;
  */
 public class SubAgent {
     private static final Logger log = LoggerFactory.getLogger(SubAgent.class);
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final String name;
     private final AgentRole role;
@@ -62,74 +57,6 @@ public class SubAgent {
         this.conversationHistory = new ArrayList<>();
         this.historyCompactor = new ConversationHistoryCompactor(llmClient);
         this.conversationHistory.add(LlmClient.Message.system(getSystemPrompt()));
-    }
-
-    private static void printToolCalls(PrintStream out, List<LlmClient.ToolCall> toolCalls) {
-        Map<String, List<LlmClient.ToolCall>> grouped = new LinkedHashMap<>();
-        for (LlmClient.ToolCall tc : toolCalls) {
-            grouped.computeIfAbsent(tc.function().name(), k -> new ArrayList<>()).add(tc);
-        }
-        for (var group : grouped.entrySet()) {
-            String toolName = group.getKey();
-            List<LlmClient.ToolCall> calls = group.getValue();
-            out.println(AnsiStyle.subtle("  " + toolLabel(toolName, calls.size())));
-            for (LlmClient.ToolCall tc : calls) {
-                String detail = extractKeyParam(toolName, tc.function().arguments());
-                if (!detail.isEmpty()) {
-                    out.println(AnsiStyle.subtle("    └ " + detail));
-                }
-            }
-        }
-    }
-
-    private static String toolLabel(String toolName, int count) {
-        return switch (toolName) {
-            case "read_file" -> "📖 读取 " + count + " 个文件";
-            case "write_file" -> "✏️ 写入 " + count + " 个文件";
-            case "list_dir" -> "📂 列出 " + count + " 个目录";
-            case "execute_command" -> "⚡ 执行 " + count + " 条命令";
-            case "create_project" -> "🏗️ 创建 " + count + " 个项目";
-            case "search_code" -> "🔍 搜索代码 " + count + " 次";
-            case "web_search" -> "🌐 联网搜索 " + count + " 次";
-            case "web_fetch" -> "📰 抓取 " + count + " 个网页";
-            case "save_memory" -> "💾 保存长期记忆 " + count + " 条";
-            default -> toolName != null && toolName.startsWith("mcp__")
-                    ? formatMcpLabel(toolName, count)
-                    : "🔧 " + toolName + " × " + count;
-        };
-    }
-
-    private static String formatMcpLabel(String toolName, int count) {
-        String[] parts = toolName.split("__", 3);
-        String display = parts.length == 3 ? parts[1] + "." + parts[2] : toolName;
-        return count == 1
-                ? "🔌 调用 MCP 工具 " + display
-                : "🔌 调用 MCP 工具 " + display + " × " + count;
-    }
-
-    private static String extractKeyParam(String toolName, String argsJson) {
-        try {
-            JsonNode node = JSON_MAPPER.readTree(argsJson);
-            String key = switch (toolName) {
-                case "read_file", "write_file", "list_dir" -> "path";
-                case "execute_command" -> "command";
-                case "create_project" -> "name";
-                case "search_code", "web_search" -> "query";
-                case "web_fetch" -> "url";
-                case "save_memory" -> "fact";
-                default -> null;
-            };
-            if (key == null) {
-                return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
-            }
-            String value = node.path(key).asText("");
-            if (value.length() > 80) {
-                value = value.substring(0, 77) + "...";
-            }
-            return value;
-        } catch (Exception e) {
-            return argsJson.length() > 80 ? argsJson.substring(0, 77) + "..." : argsJson;
-        }
     }
 
     public void setExternalContextSupplier(Supplier<String> externalContextSupplier) {
@@ -285,7 +212,7 @@ public class SubAgent {
 
                 if (response.hasToolCalls()) {
                     budget.recordToolCalls(response.toolCalls());
-                    printToolCalls(out, response.toolCalls());
+                    ToolCallLabels.printExpanded(out, response.toolCalls());
                     conversationHistory.add(LlmClient.Message.assistant(
                             response.reasoningContent(),
                             response.content(),
@@ -296,11 +223,12 @@ public class SubAgent {
                     // 没有换行的 pending 内容会被 HITL 提示"跨过"导致标题错位
                     streamRenderer.resetBetweenIterations();
 
-                    List<ToolExecutionResult> toolResults = executeToolCalls(response.toolCalls());
+                    List<ToolExecutionResult> toolResults = ToolCallRunner.execute(
+                            log, name, toolRegistry, response.toolCalls(), null);
                     for (ToolExecutionResult toolResult : toolResults) {
                         conversationHistory.add(LlmClient.Message.tool(toolResult.id(), toolResult.result()));
                     }
-                    appendImageToolMessages(toolResults);
+                    ToolCallRunner.appendImageMessages(conversationHistory, toolResults);
                     continue;
                 }
 
@@ -385,37 +313,6 @@ public class SubAgent {
         conversationHistory.add(LlmClient.Message.user(report.promptText()));
         out.println(report.displayText());
         log.info("[{}] injected LSP diagnostics into sub-agent conversation", name);
-    }
-
-    private List<ToolExecutionResult> executeToolCalls(List<LlmClient.ToolCall> toolCalls) {
-        List<ToolInvocation> invocations = new ArrayList<>();
-        for (LlmClient.ToolCall toolCall : toolCalls) {
-            String toolName = toolCall.function().name();
-            String toolArgs = toolCall.function().arguments();
-            log.info("[{}] scheduling tool: {}", name, toolName);
-            log.debug("[{}] tool args [{}]: {}", name, toolName, toolArgs);
-            invocations.add(new ToolInvocation(toolCall.id(), toolName, toolArgs));
-        }
-
-        if (invocations.size() > 1) {
-            log.info("[{}] executing {} tool calls in parallel", name, invocations.size());
-        }
-        return toolRegistry.executeTools(invocations);
-    }
-
-    private void appendImageToolMessages(List<ToolExecutionResult> toolResults) {
-        if (toolResults == null || toolResults.isEmpty()) {
-            return;
-        }
-        for (ToolExecutionResult result : toolResults) {
-            if (!result.hasImageParts()) {
-                continue;
-            }
-            List<LlmClient.ContentPart> parts = new ArrayList<>();
-            parts.add(LlmClient.ContentPart.text("工具 " + result.name() + " 返回了图片内容，请结合上面的工具文本结果分析。"));
-            parts.addAll(result.imageParts());
-            conversationHistory.add(LlmClient.Message.user(parts));
-        }
     }
 
     public String getName() {

@@ -6,6 +6,7 @@ import com.miniclaudecode.llm.LlmClient;
 import com.miniclaudecode.render.PlainRenderer;
 import com.miniclaudecode.render.Renderer;
 import com.miniclaudecode.render.StatusInfo;
+import com.miniclaudecode.render.ToolCallLabels;
 import com.miniclaudecode.util.AnsiStyle;
 import org.jline.reader.LineReader;
 import org.jline.reader.Widget;
@@ -365,10 +366,10 @@ public final class InlineRenderer implements Renderer {
         if (toolCalls == null || toolCalls.isEmpty()) {
             return;
         }
-        Map<String, List<LlmClient.ToolCall>> grouped = ToolCallRenderer.group(toolCalls);
+        Map<String, List<LlmClient.ToolCall>> grouped = ToolCallLabels.group(toolCalls);
         FoldableBlock block = new FoldableBlock(out,
                 ToolCallRenderer.collapsedHeader(grouped),
-                ToolCallRenderer.expandedLines(grouped));
+                ToolCallLabels.expandedLines(grouped));
         blockRegistry.register(block);
         TranscriptEntry entry = new BlockEntry(block);
         String rendered = entry.render();

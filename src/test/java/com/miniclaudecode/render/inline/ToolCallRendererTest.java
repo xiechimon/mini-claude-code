@@ -1,6 +1,7 @@
 package com.miniclaudecode.render.inline;
 
 import com.miniclaudecode.llm.LlmClient;
+import com.miniclaudecode.render.ToolCallLabels;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -18,7 +19,7 @@ class ToolCallRendererTest {
 
     @Test
     void singleGroupCollapsedHeaderUsesToolLabel() {
-        var grouped = ToolCallRenderer.group(List.of(
+        var grouped = ToolCallLabels.group(List.of(
                 tc("read_file", "{\"path\":\"a.md\"}"),
                 tc("read_file", "{\"path\":\"b.md\"}")));
         String header = ToolCallRenderer.collapsedHeader(grouped);
@@ -29,7 +30,7 @@ class ToolCallRendererTest {
 
     @Test
     void singleWebSearchCollapsedHeaderShowsQuery() {
-        var grouped = ToolCallRenderer.group(List.of(
+        var grouped = ToolCallLabels.group(List.of(
                 tc("web_search", "{\"query\":\"沉默王二 程序员 博主\"}")));
 
         String header = ToolCallRenderer.collapsedHeader(grouped);
@@ -40,7 +41,7 @@ class ToolCallRendererTest {
 
     @Test
     void singleWebFetchCollapsedHeaderShowsUrl() {
-        var grouped = ToolCallRenderer.group(List.of(
+        var grouped = ToolCallLabels.group(List.of(
                 tc("web_fetch", "{\"url\":\"https://www.itwanger.com/about\"}")));
 
         String header = ToolCallRenderer.collapsedHeader(grouped);
@@ -51,7 +52,7 @@ class ToolCallRendererTest {
 
     @Test
     void multipleGroupsCollapsedShowsTotalCount() {
-        var grouped = ToolCallRenderer.group(List.of(
+        var grouped = ToolCallLabels.group(List.of(
                 tc("read_file", "{}"),
                 tc("write_file", "{}")));
         String header = ToolCallRenderer.collapsedHeader(grouped);
@@ -61,9 +62,9 @@ class ToolCallRendererTest {
 
     @Test
     void expandedLinesIncludeToolLabelAndPaths() {
-        var grouped = ToolCallRenderer.group(List.of(
+        var grouped = ToolCallLabels.group(List.of(
                 tc("read_file", "{\"path\":\"README.md\"}")));
-        List<String> lines = ToolCallRenderer.expandedLines(grouped);
+        List<String> lines = ToolCallLabels.expandedLines(grouped);
         assertTrue(lines.stream().anyMatch(l -> l.contains("📖 读取 1 个文件")), lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.contains("README.md")), lines.toString());
     }
@@ -91,29 +92,5 @@ class ToolCallRendererTest {
         r.render(List.of());
         assertEquals(0, registry.size());
         assertEquals("", sink.toString(StandardCharsets.UTF_8));
-    }
-
-    @Test
-    void toolLabelRendersBuiltinTools() {
-        assertEquals("📖 读取 1 个文件", ToolCallRenderer.toolLabel("read_file", 1));
-        assertEquals("✏️ 写入 2 个文件", ToolCallRenderer.toolLabel("write_file", 2));
-        assertEquals("⚡ 执行 1 条命令", ToolCallRenderer.toolLabel("execute_command", 1));
-    }
-
-    @Test
-    void toolLabelRendersMcpTool() {
-        assertEquals("🔌 调用 MCP 工具 chrome-devtools.click",
-                ToolCallRenderer.toolLabel("mcp__chrome-devtools__click", 1));
-    }
-
-    @Test
-    void extractKeyParamPullsOutPath() {
-        assertEquals("README.md",
-                ToolCallRenderer.extractKeyParam("read_file", "{\"path\":\"README.md\"}"));
-    }
-
-    @Test
-    void extractKeyParamReturnsEmptyForNullArgs() {
-        assertEquals("", ToolCallRenderer.extractKeyParam("read_file", null));
     }
 }
