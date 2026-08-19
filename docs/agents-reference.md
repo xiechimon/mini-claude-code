@@ -209,6 +209,10 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 - 工具调用文案唯一来源是 `render/ToolCallLabels`：`toolLabel()` / `extractKeyParam()` / `group()` /
   `expandedLines()` / `printExpanded()`。PlainRenderer、InlineRenderer 的折叠块和 Plan / SubAgent 的
   `PrintStream` 直写路径共用同一份，改文案只改这一处
+- PlanExecuteAgent 可通过 `setRenderer` 注入渲染器：注入后工具调用走 `appendToolCalls`（inline 终端获得
+  折叠块），未注入保持展开态直写 out。Main 的 plan 工厂在 ReAct 已有渲染器时自动注入。SubAgent 不注入：
+  并行 step 输出必须经 step 级缓冲流按顺序重放，与 renderer transcript 的实时线性 append 冲突，
+  保持直写是有意设计
 - 环境变量：`MINI_CLAUDE_CODE_RENDERER=inline|lanterna|plain`
 - `MINI_CLAUDE_CODE_TUI=true`(旧) → lanterna + deprecation 提示
 - `MINI_CLAUDE_CODE_NO_STATUSBAR=true`：禁用底部状态栏

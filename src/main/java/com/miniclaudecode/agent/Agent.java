@@ -587,6 +587,13 @@ public class Agent {
         }
     }
 
+    /**
+     * @return 已注入的渲染器；未注入时为 null，调用方自行决定回退行为
+     */
+    public Renderer getRenderer() {
+        return renderer;
+    }
+
     public ToolRegistry getToolRegistry() {
         return toolRegistry;
     }

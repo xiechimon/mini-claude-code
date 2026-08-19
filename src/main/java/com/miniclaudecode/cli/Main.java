@@ -936,25 +936,33 @@ public class Main {
 
     static PlanExecuteAgent createPlanAgent(LlmClient llmClient, Agent reactAgent,
                                             PlanExecuteAgent.PlanReviewHandler reviewHandler) {
-        return new PlanExecuteAgent(
+        PlanExecuteAgent planAgent = new PlanExecuteAgent(
                 llmClient,
                 reactAgent.getToolRegistry(),
                 reactAgent.getMemoryManager(),
                 reviewHandler,
                 System.out
         );
+        if (reactAgent.getRenderer() != null) {
+            planAgent.setRenderer(reactAgent.getRenderer());
+        }
+        return planAgent;
     }
 
     private static PlanExecuteAgent createPlanAgent(LlmClient llmClient, Agent reactAgent,
                                                     Terminal terminal, LineReader lineReader, PrintStream out) {
         out.println("📋 使用 Plan-and-Execute 模式\n");
-        return new PlanExecuteAgent(
+        PlanExecuteAgent planAgent = new PlanExecuteAgent(
                 llmClient,
                 reactAgent.getToolRegistry(),
                 reactAgent.getMemoryManager(),
                 createPlanReviewHandler(terminal, lineReader, out),
                 out
         );
+        if (reactAgent.getRenderer() != null) {
+            planAgent.setRenderer(reactAgent.getRenderer());
+        }
+        return planAgent;
     }
 
     private static AgentOrchestrator createTeamAgent(LlmClient llmClient, Agent reactAgent, PrintStream out) {

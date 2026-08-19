@@ -13,6 +13,7 @@ import com.miniclaudecode.prompt.ProjectMemoryLoader;
 import com.miniclaudecode.prompt.PromptAssembler;
 import com.miniclaudecode.prompt.PromptContext;
 import com.miniclaudecode.prompt.PromptMode;
+import com.miniclaudecode.render.Renderer;
 import com.miniclaudecode.render.ToolCallLabels;
 import com.miniclaudecode.runtime.CancellationContext;
 import com.miniclaudecode.skill.SkillContextBuffer;
@@ -56,6 +57,7 @@ public class PlanExecuteAgent {
     private Supplier<String> externalContextSupplier = () -> "";
     private SkillRegistry skillRegistry;
     private SkillContextBuffer skillContextBuffer;
+    private Renderer renderer;
     public PlanExecuteAgent(LlmClient llmClient) {
         this(llmClient, (goal, plan) -> PlanReviewDecision.execute());
     }
@@ -109,6 +111,22 @@ public class PlanExecuteAgent {
                 System.out.flush();
             }
         }, true, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 注入渲染器后，工具调用展示改走 {@link Renderer#appendToolCalls}（inline 终端获得折叠块）；
+     * 未注入时保持展开态直写 out，TUI 与单测路径行为不变
+     */
+    public void setRenderer(Renderer renderer) {
+        this.renderer = renderer;
+    }
+
+    void renderToolCalls(PrintStream out, List<LlmClient.ToolCall> toolCalls) {
+        if (renderer != null) {
+            renderer.appendToolCalls(toolCalls);
+            return;
+        }
+        ToolCallLabels.printExpanded(out, toolCalls);
     }
 
     public void setExternalContextSupplier(Supplier<String> externalContextSupplier) {
@@ -462,7 +480,7 @@ public class PlanExecuteAgent {
                 return TaskRunResult.of(response.content(), streamRenderer.hasStreamedOutput());
             }
 
-            ToolCallLabels.printExpanded(out, response.toolCalls());
+            renderToolCalls(out, response.toolCalls());
             messages.add(LlmClient.Message.assistant(
                     response.reasoningContent(),
                     response.content(),
