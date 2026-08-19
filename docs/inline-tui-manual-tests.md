@@ -595,6 +595,13 @@ java -jar target/mini-claude-code-1.0-SNAPSHOT.jar
 
 **通过判定**：折叠块可展开/收起 + 摘要行出现且单行。若工具调用仍打印为多行展开列表（无 `⏵` 前缀），说明渲染器未注入 plan 工厂。
 
+**2026-08-19 补充实测（anysearch 接入后，ReAct 路径）**：✅ 通过。搜索摘要两分支均验证——
+`→ 搜索 "Java virtual threads 2026 latest updates JEP" 返回 5 条结果`、
+`→ 抓取 javapro.io/... 完成: Structured Concurrency in Java 26 (JEP 525 Deep Dive)`、
+`→ 抓取 blogs.oracle.com/... 失败: 抓取失败: HTTP 403`；403 后按 web-access skill 指引降级
+chrome-devtools MCP 成功取回正文。五个折叠块（load_skill / 搜索 / 抓取 / browser_status / MCP）
+均为 `⏵` 单行态。
+
 **2026-08-19 实测**（iTerm2 / macOS）：✅ 通过。
 
 - 每个任务迭代出现单行折叠态：`⏵ 联网搜索 2 次 (ctrl+o to expand)`、`⏵ 抓取 2 个网页 (ctrl+o to expand)`、`⏵ 2 组工具调用 / 2 次 (ctrl+o to expand)`（混合批次的折叠头）——多行展开列表没有再出现
