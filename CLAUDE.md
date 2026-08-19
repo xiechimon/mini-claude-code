@@ -78,7 +78,7 @@ CodeGraph 无结果或只需精确文本匹配时再用 `rg`。避免无目标�
 - 默认使用 project scope；跨项目偏好才使用 global。
 - `MCC.md` 放可提交、长期稳定的项目规则；一次性任务不写入。
 - short-term memory 压缩与 conversation history 压缩是两条链路；真正防止请求超过窗口的是后者。
-- `/clear` 清当前会话、短期记忆和待注入 Skill buffer，保留长期记忆；`/compact` 只压缩当前 ReAct history。
+- `/clear` 清当前会话、短期记忆和待注入 Skill buffer，保留长期记忆，并清屏重放开屏 banner（含项目目录行）；`/compact` 只压缩当前 ReAct history。
 
 ### 工具、安全与并发
 

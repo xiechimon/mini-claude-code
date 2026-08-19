@@ -336,7 +336,15 @@ public class Main {
                         reactAgent.clearHistory();
                         hitlHandler.clearApprovedAll();
                         renderer.updateStatus(statusInfo(reactAgent, mcpServerManager, skillRegistry, "idle"));
-                        ui.println("🗑️ 当前对话历史已清空，长期记忆保持不变\n");
+                        StartupScreenInfo clearInfo = startupScreenInfo(llmClient, mcpServerManager, skillRegistry,
+                                "🗑️ 当前对话历史已清空，长期记忆保持不变");
+                        if (renderer instanceof InlineRenderer inline) {
+                            inline.showStartupScreenAgain(startupScreenLines(clearInfo));
+                        } else {
+                            ui.print("[2J[3J[H");
+                            ui.flush();
+                            printStartupScreen(ui, clearInfo);
+                        }
                         continue;
                     }
                     case COMPACT -> {
@@ -2258,6 +2266,7 @@ public class Main {
                 tools,
                 skillEnabled,
                 skillTotal,
+                System.getProperty("user.dir"),
                 note == null ? "" : note.trim()
         );
     }
@@ -2591,6 +2600,25 @@ public class Main {
         return config.getProviders().computeIfAbsent(provider, ignored -> new MiniClaudeCodeConfig.ProviderConfig());
     }
 
+    /**
+     * 项目目录的 banner 显示形态：home 之下显示 ~/ 相对路径，否则显示绝对路径
+     */
+    static String displayProjectDir(String projectDir) {
+        if (projectDir == null || projectDir.isBlank()) {
+            return "~";
+        }
+        Path dir = Path.of(projectDir.trim()).normalize();
+        String home = System.getProperty("user.home");
+        if (home != null && !home.isBlank()) {
+            Path homePath = Path.of(home).normalize();
+            if (dir.startsWith(homePath)) {
+                Path rel = homePath.relativize(dir);
+                return rel.toString().isEmpty() ? "~" : "~/" + rel;
+            }
+        }
+        return dir.toString();
+    }
+
     private static void printStartupScreen(PrintStream out, StartupScreenInfo info) {
         for (String line : startupScreenLines(info)) {
             out.println(line);
@@ -2612,24 +2640,19 @@ public class Main {
                 0,
                 0,
                 0,
+                null,
                 ""));
     }
 
     static List<String> startupBannerLines(StartupScreenInfo info) {
         String model = info.model() == null || info.model().isBlank() ? "auto" : info.model();
         String provider = info.provider() == null || info.provider().isBlank() ? "model" : info.provider();
-        String mcp = info.mcpTotal() <= 0
-                ? "MCP not configured"
-                : "MCP " + info.mcpReady() + "/" + info.mcpTotal() + " · " + info.mcpTools() + " tools";
-        String skills = info.skillsTotal() <= 0
-                ? "0 skills"
-                : info.skillsEnabled() + "/" + info.skillsTotal() + " skills";
         String ready = "Model " + model + " (" + provider + ")";
-        String state = mcp + " · " + skills + " · ReAct";
+        String dir = displayProjectDir(info.projectDir());
         List<String> lines = new ArrayList<>(List.of(
                 "   " + AnsiStyle.section("███╗   ███╗  ██████╗  ██████╗") + "    " + AnsiStyle.emphasis("Mini Claude Code") + "  " + AnsiStyle.subtle("v" + VERSION),
                 "   " + AnsiStyle.section("████╗ ████║ ██╔════╝ ██╔════╝") + "    " + AnsiStyle.subtle(ready),
-                "   " + AnsiStyle.section("██╔████╔██║ ██║      ██║     ") + "    " + AnsiStyle.subtle(state),
+                "   " + AnsiStyle.section("██╔████╔██║ ██║      ██║     ") + "    " + AnsiStyle.subtle(dir),
                 "   " + AnsiStyle.section("██║╚██╔╝██║ ╚██████╗ ╚██████╗"),
                 "   " + AnsiStyle.section("╚═╝ ╚═╝ ╚═╝  ╚═════╝  ╚═════╝"),
                 "",
@@ -2768,6 +2791,7 @@ public class Main {
             int mcpTools,
             int skillsEnabled,
             int skillsTotal,
+            String projectDir,
             String note
     ) {
     }

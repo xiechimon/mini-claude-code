@@ -329,6 +329,37 @@ public final class InlineRenderer implements Renderer {
     }
 
     /**
+     * /clear 场景：清屏并重放开屏 banner
+     *
+     * <p>清空 transcript / 折叠块注册表后整屏擦除（含 scrollback），banner 重新
+     * printAbove 进 transcript；输入行仍由 LineReader 持有，不受影响
+     */
+    public void showStartupScreenAgain(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        synchronized (transcriptLock) {
+            transcript.clear();
+            renderedRows = 0;
+        }
+        blockRegistry.clear();
+        synchronized (out) {
+            out.print("[2J[3J[H");
+            out.flush();
+        }
+        LineReader reader = lineReader;
+        String joined = joinLines(List.copyOf(lines));
+        if (reader != null && started && !closed) {
+            reader.printAbove(joined);
+        } else {
+            synchronized (out) {
+                out.print(joined);
+                out.flush();
+            }
+        }
+    }
+
+    /**
      * 清掉 JLine accept 后留在屏幕上的编辑态输入行
      *
      * <p>普通任务会随后以 {@code > prompt} 的 transcript 块写回；这里清理的是编辑态

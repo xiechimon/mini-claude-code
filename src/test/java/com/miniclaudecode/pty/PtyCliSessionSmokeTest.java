@@ -63,6 +63,40 @@ class PtyCliSessionSmokeTest {
     }
 
     @Test
+    void clearCommandReshowsBannerAndClearsScreen() throws Exception {
+        StubScript script = StubScript.textReply("ok");
+        try (PtyTestHarness h = PtyTestHarness.start(script, "inline")) {
+            String raw = h.session().currentOutput();
+            int bannersBefore = countOccurrences(raw, "Tips for getting started");
+
+            h.session().send("/clear");
+            // banner 重放：第二次出现
+            h.session().expect(
+                    java.util.regex.Pattern.compile("(?s)Tips for getting started.*当前对话历史已清空"),
+                    Duration.ofSeconds(15));
+
+            String after = h.session().currentOutput();
+            assertTrue(countOccurrences(after, "Tips for getting started") > bannersBefore,
+                    "/clear 后 banner 应重新出现");
+            assertTrue(after.contains("长期记忆保持不变"),
+                    "清空提示应随 banner note 显示");
+            // 清屏序列（raw buffer 保留 ANSI）
+            assertTrue(after.contains("[2J"),
+                    "应发送清屏转义序列");
+        }
+    }
+
+    private static int countOccurrences(String haystack, String needle) {
+        int count = 0;
+        int idx = 0;
+        while ((idx = haystack.indexOf(needle, idx)) >= 0) {
+            count++;
+            idx += needle.length();
+        }
+        return count;
+    }
+
+    @Test
     void sendAndExpectPattern() throws Exception {
         StubScript script = StubScript.toolThenReply(
                 "read_file", "{\"path\":\"README.md\",\"offset\":1,\"limit\":50}",

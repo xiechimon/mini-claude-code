@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Path;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -87,6 +88,33 @@ class MainInputNormalizationTest {
         assertTrue(lines.stream().noneMatch(line -> line.contains("────────────────")));
         assertTrue(lines.stream().noneMatch(line -> line.endsWith("║")),
                 "banner should not depend on a padded right border");
+    }
+
+    @Test
+    void startupBannerShowsProjectDirInsteadOfMcpStateLine() {
+        List<String> lines = Main.startupBannerLines();
+
+        // MCP/skills/ReAct 概要行被项目目录行替换（信息移至底部状态栏）
+        assertTrue(lines.stream().noneMatch(line -> line.contains("· ReAct")),
+                "banner 不应再显示 MCP · skills · ReAct 概要行");
+        // projectDir 为 null 时回退 ~
+        assertTrue(lines.stream().anyMatch(line -> line.contains("~")));
+    }
+
+    @Test
+    void displayProjectDirUsesTildeUnderHome() {
+        String home = System.getProperty("user.home");
+        String under = Path.of(home, "Code", "demo").toString();
+        assertEquals("~/Code/demo", Main.displayProjectDir(under));
+        assertEquals("~", Main.displayProjectDir(home));
+        assertEquals("~", Main.displayProjectDir(null));
+        assertEquals("~", Main.displayProjectDir("  "));
+
+        String outside = Path.of("/opt", "work").toString();
+        String expected = Path.of("/opt", "work").normalize().toString();
+        if (!expected.startsWith(home)) {
+            assertEquals(expected, Main.displayProjectDir(outside));
+        }
     }
 
     @Test
