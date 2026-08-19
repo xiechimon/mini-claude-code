@@ -21,6 +21,7 @@ import com.miniclaudecode.rag.CodeIndex;
 import com.miniclaudecode.rag.CodeRelation;
 import com.miniclaudecode.rag.CodeRetriever;
 import com.miniclaudecode.rag.SearchResultFormatter;
+import com.miniclaudecode.render.PlainRenderer;
 import com.miniclaudecode.render.Renderer;
 import com.miniclaudecode.render.RendererFactory;
 import com.miniclaudecode.render.StatusInfo;
@@ -340,10 +341,8 @@ public class Main {
                                 "🗑️ 当前对话历史已清空，长期记忆保持不变");
                         if (renderer instanceof InlineRenderer inline) {
                             inline.showStartupScreenAgain(startupScreenLines(clearInfo));
-                        } else {
-                            ui.print("[2J[3J[H");
-                            ui.flush();
-                            printStartupScreen(ui, clearInfo);
+                        } else if (renderer instanceof PlainRenderer plain) {
+                            plain.showStartupScreenAgain(startupScreenLines(clearInfo));
                         }
                         continue;
                     }

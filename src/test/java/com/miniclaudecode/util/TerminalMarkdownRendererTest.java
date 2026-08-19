@@ -75,6 +75,16 @@ class TerminalMarkdownRendererTest {
     }
 
     @Test
+    void fourSpaceIndentedListStaysListNotCodeBlock() {
+        // 4 空格嵌套列表项必须走列表分支：inline 标记要 sanitize，不能当代码裸输出
+        String markdown = "1. 总体\n    - **加粗**项\n";
+        String rendered = TerminalMarkdownRenderer.render(markdown);
+        assertFalse(rendered.contains("**"),
+                "4 空格列表项的 inline 标记应被渲染，不应按代码块裸输出: " + rendered);
+        assertTrue(rendered.contains("加粗"));
+    }
+
+    @Test
     void fallsBackToKeyValueLayoutForLongTwoColumnTable() {
         String markdown = """
                 | 目录名 | 说明 |

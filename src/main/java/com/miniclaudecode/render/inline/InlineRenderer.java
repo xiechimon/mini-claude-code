@@ -129,7 +129,7 @@ public final class InlineRenderer implements Renderer {
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char ch = s.charAt(i);
-            if (ch == '' && i + 1 < s.length() && s.charAt(i + 1) == '[') {
+            if (ch == '\u001B' && i + 1 < s.length() && s.charAt(i + 1) == '[') {
                 int j = i + 2;
                 while (j < s.length()) {
                     char c = s.charAt(j);
@@ -344,7 +344,7 @@ public final class InlineRenderer implements Renderer {
         }
         blockRegistry.clear();
         synchronized (out) {
-            out.print("[2J[3J[H");
+            out.print(AnsiStyle.CLEAR_SCREEN);
             out.flush();
         }
         LineReader reader = lineReader;

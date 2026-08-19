@@ -4,10 +4,21 @@ package com.miniclaudecode.util;
  * 终端 ANSI 样式辅助
  */
 public final class AnsiStyle {
-    private static final String RESET = "\u001B[0m";
-    private static final String BOLD = "\u001B[1m";
+    /**
+     * 前缀/复位序列公开给同包组装场景（如 TerminalMarkdownRenderer 的正则替换）
+     */
+    public static final String PREFIX_BOLD = "\u001B[1m";
+    public static final String PREFIX_ITALIC = "\u001B[3m";
+    public static final String PREFIX_CODE = "\u001B[33m";
+    public static final String PREFIX_DIM_URL = "\u001B[2;37m";
+    public static final String RESET_SEQ = "\u001B[0m";
+    /** 整屏擦除 + 清 scrollback + 光标归位；/clear 重放 banner 用 */
+    public static final String CLEAR_SCREEN = "\u001B[2J\u001B[3J\u001B[H";
+
+    private static final String RESET = RESET_SEQ;
+    private static final String BOLD = PREFIX_BOLD;
     private static final String DIM = "\u001B[2m";
-    private static final String ITALIC = "\u001B[3m";
+    private static final String ITALIC = PREFIX_ITALIC;
     private static final String CYAN = "\u001B[36m";
     private static final String GREEN = "\u001B[32m";
     private static final String YELLOW = "\u001B[33m";

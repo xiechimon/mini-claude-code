@@ -35,6 +35,22 @@ public final class PlainRenderer implements Renderer {
         this.in = in;
     }
 
+    /**
+     * /clear 场景：清屏并重放开屏 banner
+     *
+     * <p>plain 无 transcript 状态，直接擦屏重打印
+     */
+    public void showStartupScreenAgain(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        out.print(AnsiStyle.CLEAR_SCREEN);
+        out.flush();
+        for (String line : lines) {
+            out.println(line);
+        }
+    }
+
     @Override
     public void start() {
     }

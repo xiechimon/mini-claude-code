@@ -197,11 +197,14 @@ public final class TerminalMarkdownRenderer {
             return;
         }
 
-        // 4 空格缩进代码块（不在 fence 内时）
+        // 4 空格缩进代码块（不在 fence 内时）；内容是列表项时让给列表分支，
+        // 否则 4 空格嵌套列表会被当代码裸输出（inline 标记不渲染）
         if (!inCodeBlock && line.length() >= 4
                 && line.charAt(0) == ' ' && line.charAt(1) == ' '
                 && line.charAt(2) == ' ' && line.charAt(3) == ' '
-                && !line.isBlank()) {
+                && !line.isBlank()
+                && !UNORDERED_LIST.matcher(line).matches()
+                && !ORDERED_LIST.matcher(line).matches()) {
             writeLine("    " + line.substring(4), BlockType.CODE_BLOCK);
             return;
         }
@@ -512,12 +515,6 @@ public final class TerminalMarkdownRenderer {
         needsLineBreakBeforeNextBlock = false;
     }
 
-    private static final String ANSI_BOLD = "[1m";
-    private static final String ANSI_ITALIC = "[3m";
-    private static final String ANSI_RESET = "[0m";
-    private static final String ANSI_DIM_URL = "[2;37m";
-    private static final String ANSI_INLINE_CODE = "[33m";
-
     // 转义占位符：\X 的 X 换成私有区字符，跑完 markdown 正则后再还原
     private static final String ESCAPED_MARKERS = "*_`~[]()<>\\#";
 
@@ -539,11 +536,11 @@ public final class TerminalMarkdownRenderer {
         String s = escaped.toString();
 
         boolean color = AnsiStyle.isEnabled();
-        String bold = color ? ANSI_BOLD : "";
-        String italic = color ? ANSI_ITALIC : "";
-        String reset = color ? ANSI_RESET : "";
-        String codeColor = color ? ANSI_INLINE_CODE : "";
-        String dimUrl = color ? ANSI_DIM_URL : "";
+        String bold = color ? AnsiStyle.PREFIX_BOLD : "";
+        String italic = color ? AnsiStyle.PREFIX_ITALIC : "";
+        String reset = color ? AnsiStyle.RESET_SEQ : "";
+        String codeColor = color ? AnsiStyle.PREFIX_CODE : "";
+        String dimUrl = color ? AnsiStyle.PREFIX_DIM_URL : "";
 
         s = s.replaceAll("\\*\\*(.+?)\\*\\*", bold + "$1" + reset);
         s = s.replaceAll("__(.+?)__", bold + "$1" + reset);
@@ -576,9 +573,6 @@ public final class TerminalMarkdownRenderer {
         return c;
     }
 
-    private static String ansiWrap(String prefix, String groupRef) {
-        return prefix + groupRef + ANSI_RESET;
-    }
 
     private String padRight(String value, int width) {
         if (value.length() >= width) {
