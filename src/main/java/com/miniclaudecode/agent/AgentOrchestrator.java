@@ -46,6 +46,12 @@ public class AgentOrchestrator {
     private static final Logger log = LoggerFactory.getLogger(AgentOrchestrator.class);
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final int MAX_RETRIES_PER_STEP = 2;
+    /**
+     * 丢弃流：reviewer 的 JSON 是给 parseReviewApproval 的协议数据，重试轮的 worker 输出
+     * 已在首轮流式展示过——两者都不应再渲染给用户
+     */
+    private static final PrintStream SILENT =
+            new PrintStream(java.io.OutputStream.nullOutputStream(), true, java.nio.charset.StandardCharsets.UTF_8);
 
     private final LlmClient llmClient;
     private final SubAgent planner;
@@ -120,7 +126,7 @@ public class AgentOrchestrator {
 
         AgentMessage planMessage = AgentMessage.task("orchestrator",
                 "请为以下任务制定执行计划：\n" + userInput);
-        AgentMessage planResult = planner.execute(planMessage, out);
+        AgentMessage planResult = planner.execute(planMessage, SILENT);
         planner.clearHistory();
         if (CancellationContext.isCancelled()) {
             return "⏹️ 已取消当前多 Agent 任务。";
@@ -457,7 +463,7 @@ public class AgentOrchestrator {
         }
 
         out.println("🔍 " + reviewer.getName() + " 正在审查步骤 [" + step.id() + "] 的结果...");
-        AgentMessage reviewResult = reviewer.review(step.description(), result.content(), out);
+        AgentMessage reviewResult = reviewer.review(step.description(), result.content(), SILENT);
         reviewer.clearHistory();
 
         if (reviewResult.type() == AgentMessage.Type.ERROR) {
@@ -487,7 +493,8 @@ public class AgentOrchestrator {
             out.println("   反馈: " + issues + "\n");
 
             String feedbackContext = context + "\n\n之前的执行结果被审查拒绝，原因：\n" + issues;
-            AgentMessage retryResult = worker.executeWithContext(taskMsg, feedbackContext, out);
+            out.println("🔄 重试 (" + retries + "/" + MAX_RETRIES_PER_STEP + ") 重新执行步骤 [" + step.id() + "]...");
+            AgentMessage retryResult = worker.executeWithContext(taskMsg, feedbackContext, SILENT);
             if (retryResult.type() == AgentMessage.Type.ERROR) {
                 log.warn("Step {} retry {} failed at LLM layer: {}", step.id(), retries, retryResult.content());
                 issues = "重试时 LLM 调用失败：" + retryResult.content();
@@ -503,7 +510,7 @@ public class AgentOrchestrator {
             }
 
             acceptedResult = retryResult.content();
-            AgentMessage retryReview = reviewer.review(step.description(), acceptedResult, out);
+            AgentMessage retryReview = reviewer.review(step.description(), acceptedResult, SILENT);
             reviewer.clearHistory();
 
             if (retryReview.type() == AgentMessage.Type.ERROR) {

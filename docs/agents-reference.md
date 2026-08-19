@@ -136,6 +136,9 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 - 流程：规划 → 按依赖分配 Worker → Reviewer 审查 → 未通过重试 (最多 2 次)
 - SubAgent IOException 返回 ERROR 类型
 - 所有子代理共享 ToolRegistry 和 MemoryManager
+- 终端噪音边界：planner 的计划 JSON 与 reviewer 的审查 JSON 是协议数据，只进 parsePlan /
+  parseReviewApproval，不流式渲染给用户；计划由 summarizeSteps 结构化展示，审查结论只打
+  ✅/⚠️ 单行（拒绝时附 issues 反馈）。重试轮 worker 输出不再重放，只打 `🔄 重试 (n/2)` 单行
 
 ### HITL
 
