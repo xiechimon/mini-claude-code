@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Turn 协议术语、调用链与差异速查">
+  <title>Turn 协议速查表</title>
+  <link rel="stylesheet" href="assets/lesson.css">
+</head>
+<body>
+  <main class="page reference-page">
+    <nav class="crumbs" aria-label="课程导航">
+      Reference · <a href="0001-turn-protocol.html">返回 Lesson 0001</a>
+    </nav>
+
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Quick Reference</p>
+        <h1>Turn 协议速查</h1>
+      </div>
+      <p class="meta"><strong>打印友好</strong>定义、项目映射、协议差异与源码入口。</p>
+    </header>
+
+    <section class="section">
+      <aside class="section-index"><b>A</b>术语</aside>
+      <div>
+        <h2>四个不要混用的词</h2>
+        <div class="reference-grid">
+          <article class="reference-card"><h3>Thread</h3><p>跨多轮的对话容器。官方语义包含可恢复的历史；本项目 Runtime MVP 目前主要用它分组事件。</p></article>
+          <article class="reference-card"><h3>Turn</h3><p>一次用户请求及其后续 Agent 工作，直到 completed、failed 或 interrupted 等终态。</p></article>
+          <article class="reference-card"><h3>Item</h3><p>Turn 内单个可观察输入/输出：消息、命令、文件变更、工具调用等。当前项目 Runtime API 尚未建模。</p></article>
+          <article class="reference-card"><h3>LLM call</h3><p>一次模型请求。ReAct Turn 里可能发生多次；它是实现步骤，不是用户层事务边界。</p></article>
+        </div>
+        <pre><code>Thread 1 ─┬─ Turn A ─┬─ user input
+          │          ├─ LLM call
+          │          ├─ tool call
+          │          └─ final answer
+          └─ Turn B ─┬─ user input
+                     └─ ...</code></pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <aside class="section-index"><b>B</b>本地调用链</aside>
+      <div>
+        <h2>两条 Turn 路径</h2>
+        <h3>交互式执行与快照</h3>
+        <pre><code>Main / TuiSessionController
+  → SnapshotService.runTurn(mode, input, work)
+    → preTurnSnapshot
+    → Agent.run | PlanExecuteAgent.run | AgentOrchestrator.run
+    → finally: postTurnSnapshotAsync</code></pre>
+
+        <h3>Runtime HTTP 协议</h3>
+        <pre><code>POST /v1/threads
+  → RuntimeThreadStore.createThread
+
+POST /v1/threads/{id}/turns
+  → turn.started
+  → executor.submit(runTurn)
+  → fresh headless Agent
+  → message.delta + turn.completed | turn.failed
+
+GET /v1/threads/{id}/events?after=N
+  → ordered persisted events as one SSE-formatted response</code></pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <aside class="section-index"><b>C</b>判断题</aside>
+      <div>
+        <h2>读代码时快速校准</h2>
+        <table class="compare">
+          <tbody>
+            <tr><td>一次工具调用就是 Turn？</td><td>否。它只是 Turn 内的一个动作或 Item。</td></tr>
+            <tr><td>Plan 的每个 DAG 节点是 Turn？</td><td>否。整个用户 Plan 任务才是快照 Turn。</td></tr>
+            <tr><td>Runtime Thread 会保留聊天上下文？</td><td>当前不会。它持久化 thread 标识与事件，每轮新建 Agent。</td></tr>
+            <tr><td><code>message.delta</code> 真正逐 token？</td><td>当前不会。runner 完成后一次写入完整 result。</td></tr>
+            <tr><td>Runtime Turn 自动建立 side-git 快照？</td><td>当前不会。该 runner 未经过 <code>SnapshotService.runTurn()</code>。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <aside class="section-index"><b>D</b>入口</aside>
+      <div>
+        <h2>按问题找文件</h2>
+        <table class="compare">
+          <tbody>
+            <tr><td>Turn 如何包住三种模式？</td><td><a href="../../src/main/java/com/miniclaudecode/cli/Main.java">Main.java</a>、<a href="../../src/main/java/com/miniclaudecode/snapshot/SnapshotService.java">SnapshotService.java</a></td></tr>
+            <tr><td>一轮为何会多次调模型？</td><td><a href="../../src/main/java/com/miniclaudecode/agent/Agent.java">Agent.java</a></td></tr>
+            <tr><td>HTTP turn 如何创建事件？</td><td><a href="../../src/main/java/com/miniclaudecode/runtime/api/RuntimeApiServer.java">RuntimeApiServer.java</a></td></tr>
+            <tr><td>Thread / Event 保存了什么？</td><td><a href="../../src/main/java/com/miniclaudecode/runtime/api/RuntimeThreadStore.java">RuntimeThreadStore.java</a></td></tr>
+            <tr><td>官方完整协议是什么？</td><td><a href="https://learn.chatgpt.com/docs/app-server">OpenAI Docs · Codex App Server</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

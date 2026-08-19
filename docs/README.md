@@ -13,6 +13,17 @@
 | [prompt-analysis-template.md](prompt-analysis-template.md)                 | 分析实际组装后的 system prompt                         |
 | [phase-21-image-input-manual-test.md](phase-21-image-input-manual-test.md) | 手工验证剪贴板和图片输入                               |
 
+## 学习课程
+
+`lessons/` 保存以本仓库源码为对象的短课，用来建立阅读和判断架构的能力，不描述当前功能清单。
+
+| 课程                                                                   | 主题                             |
+|------------------------------------------------------------------------|----------------------------------|
+| [0001-turn-protocol.html](lessons/0001-turn-protocol.html)             | 一次用户输入的完整 Turn 生命周期 |
+| [turn-protocol-cheatsheet.html](lessons/turn-protocol-cheatsheet.html) | Turn / Thread / Item 速查表      |
+
+学习目标见 [MISSION.md](lessons/MISSION.md)，参考资料见 [RESOURCES.md](lessons/RESOURCES.md)。
+
 ## 设计记录
 
 数字 phase 表示实现顺序，不是产品版本，也不是当前功能清单。这些文件保留当时的问题、取舍、草图和验证证据；其中的版本号、命令或计划可能已经过时。

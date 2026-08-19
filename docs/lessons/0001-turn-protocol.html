@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="理解 Mini Claude Code 与 Codex App Server 中的 Turn 协议">
+  <title>Turn：一次用户意图的执行边界</title>
+  <link rel="stylesheet" href="assets/lesson.css">
+  <script src="assets/quiz.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <nav class="crumbs" aria-label="课程导航">
+      Lesson 0001 · <a href="turn-protocol-cheatsheet.html">Turn 速查表</a>
+    </nav>
+
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Mini Claude Code · Architecture Lesson</p>
+        <h1>Turn 是一次用户意图的执行边界</h1>
+      </div>
+      <p class="meta">
+        <strong>约 8 分钟</strong>
+        目标：看见“一轮”背后的完整生命周期，而不是把它误认成一条消息或一次模型调用。
+      </p>
+    </header>
+
+    <p class="lede">
+      你在终端按下一次回车，看起来只发送了一句话；系统内部却可能经历多次模型推理、并发工具调用、审批、文件修改和最终回复。<strong>Turn</strong> 就是把这整段工作圈起来的那条边界。
+    </p>
+
+    <section class="section" id="mental-model">
+      <aside class="section-index"><b>01</b>先建立模型</aside>
+      <div>
+        <h2>它比 Message 大，比 Thread 小</h2>
+        <div class="thesis">
+          <strong>一句话：</strong>Thread 是持续的对话；Turn 是其中一次用户请求及后续 Agent 工作；Item 是 Turn 中可观察的输入或输出单位。
+        </div>
+
+        <div class="stack" aria-label="Thread Turn Item 层级">
+          <div class="stack-row">
+            <span class="tag">Thread</span>
+            <span>一个可持续、可恢复的对话容器，里面有多个 Turn。</span>
+          </div>
+          <div class="stack-row">
+            <span class="tag">Turn</span>
+            <span>一次用户意图从开始、执行到终态的完整工作单元。</span>
+          </div>
+          <div class="stack-row">
+            <span class="tag">Item</span>
+            <span>用户消息、Agent 消息、命令执行、文件修改、工具调用等单个事件对象。</span>
+          </div>
+        </div>
+
+        <p>所以不要写出这个等式：</p>
+        <pre><code>Turn ≠ Message
+Turn ≠ 一次 LLM HTTP 请求
+Turn = 一个用户请求 + 0..N 次推理 + 0..N 个工具动作 + 一个终态</code></pre>
+        <p class="source-note">
+          定义来源：<a href="https://learn.chatgpt.com/docs/app-server">OpenAI Docs · Codex App Server</a> 的 Core primitives 与 Lifecycle overview。
+        </p>
+      </div>
+    </section>
+
+    <section class="section" id="official-protocol">
+      <aside class="section-index"><b>02</b>官方协议</aside>
+      <div>
+        <h2>App Server 用 Turn 驱动一次 Agent 生命周期</h2>
+        <p>Codex App Server 是双向 JSON-RPC 协议。客户端先建立 Thread，再用 <code>turn/start</code> 发起一轮，并持续消费通知。</p>
+
+        <div class="flow" aria-label="Codex App Server Turn 生命周期">
+          <div class="flow-step">
+            <span class="flow-no">1</span>
+            <div class="flow-copy"><strong><code>thread/start</code></strong><span>创建对话容器，获得 threadId。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">2</span>
+            <div class="flow-copy"><strong><code>turn/start</code></strong><span>提交输入，可覆盖 model、cwd、sandbox、approval 等本轮配置。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">3</span>
+            <div class="flow-copy"><strong><code>item/*</code> 与 delta</strong><span>推理、消息、命令、文件变更和工具进度逐步成为可观察事件。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">4</span>
+            <div class="flow-copy"><strong>steer / approval / interrupt</strong><span>客户端可以在活动 Turn 中追加方向、回答审批或请求中断。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">5</span>
+            <div class="flow-copy"><strong><code>turn/completed</code></strong><span>以完成、失败或中断等最终状态封口。</span></div>
+          </div>
+        </div>
+
+        <p>这层协议的价值不是换一个“轮次”名词，而是提供稳定的<strong>相关性 ID、生命周期、流式观察、控制面与恢复边界</strong>。UI 不需要知道 ReAct 内部循环了几次，只需理解 Turn 和 Item 事件。</p>
+      </div>
+    </section>
+
+    <section class="section" id="project-boundary">
+      <aside class="section-index"><b>03</b>项目内部</aside>
+      <div>
+        <h2>Mini Claude Code 先把 Turn 用作安全事务边界</h2>
+        <p>在交互式 CLI 中，一条普通输入、一个 <code>/plan</code> 任务或一个 <code>/team</code> 任务，都会先汇合到同一个包装器：</p>
+
+        <pre><code>Main
+  ├─ 选择 react / plan / team
+  └─ SnapshotService.runTurn(mode, input, work)
+       ├─ 同步 pre-turn snapshot
+       ├─ 执行完整 Agent 工作
+       └─ finally: 异步 post-turn snapshot</code></pre>
+
+        <p>这说明项目把 Turn 定义成<strong>用户可理解、可整体撤销的一次任务</strong>。Plan 里的 DAG 节点和 Team 里的 Worker 都不是新 Turn，否则快照会碎成大量内部噪声。</p>
+
+        <div class="callout">
+          <span class="mini-label">关键源码事实</span>
+          <p><a href="../../src/main/java/com/miniclaudecode/agent/Agent.java">Agent.run()</a> 内部是循环：模型要求工具时，执行工具、把结果放回 history，然后继续下一次模型调用；直到模型不再要求工具才返回。因此一次 ReAct Turn 可以包含很多次模型调用。</p>
+        </div>
+
+        <p class="source-note">
+          继续追踪：<a href="../../src/main/java/com/miniclaudecode/cli/Main.java">Main.java</a> →
+          <a href="../../src/main/java/com/miniclaudecode/snapshot/SnapshotService.java">SnapshotService.java</a> →
+          <a href="../../src/main/java/com/miniclaudecode/agent/Agent.java">Agent.java</a>。
+        </p>
+      </div>
+    </section>
+
+    <section class="section" id="runtime-api">
+      <aside class="section-index"><b>04</b>Runtime API</aside>
+      <div>
+        <h2>网络层也有 Turn，但它还是精简版骨架</h2>
+        <p><a href="../../src/main/java/com/miniclaudecode/runtime/api/RuntimeApiServer.java">RuntimeApiServer</a> 采用 HTTP + SSE 回放：</p>
+
+        <div class="flow" aria-label="Mini Claude Code Runtime API Turn 生命周期">
+          <div class="flow-step">
+            <span class="flow-no">1</span>
+            <div class="flow-copy"><strong><code>POST /v1/threads</code></strong><span>SQLite 中创建 thread，并记录 <code>thread.created</code>。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">2</span>
+            <div class="flow-copy"><strong><code>POST /threads/{id}/turns</code></strong><span>记录 <code>turn.started</code>，后台执行，立即返回 HTTP 202。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">3</span>
+            <div class="flow-copy"><strong>Headless Agent</strong><span>运行结束后写一条 <code>message.delta</code>，再写 completed；异常则写 failed。</span></div>
+          </div>
+          <div class="flow-step">
+            <span class="flow-no">4</span>
+            <div class="flow-copy"><strong><code>GET /events?after=N</code></strong><span>按游标回放已持久化事件；响应写完即关闭，不是持续推送连接。</span></div>
+          </div>
+        </div>
+
+        <div class="callout">
+          <span class="mini-label">最值得记住的实现边界</span>
+          <p>当前 Runtime API 的 Thread 主要是<strong>事件分组键</strong>，还不是 Agent 对话上下文：每个 Turn 都通过 <code>runHeadlessTask()</code> 新建一个 Agent。前一 Turn 的 conversation history 不会自动进入后一 Turn。</p>
+          <p>同样，Runtime API runner 直接调用 <code>Agent.run()</code>，没有经过交互路径的 <code>SnapshotService.runTurn()</code>。因此“Runtime 协议 Turn”和“快照 Turn”目前只是概念对应，尚未共享同一个生命周期对象。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <aside class="section-index"><b>05</b>对照</aside>
+      <div>
+        <h2>相同骨架，不同成熟度</h2>
+        <table class="compare">
+          <thead>
+            <tr><th>维度</th><th>Codex App Server</th><th>Mini Claude Code 当前实现</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>传输</td><td>双向 JSON-RPC；stdio / WebSocket 等</td><td>HTTP 请求 + SSE 格式事件回放</td></tr>
+            <tr><td>内部单位</td><td>Thread → Turn → Item</td><td>Thread → Turn → 扁平 Event</td></tr>
+            <tr><td>输出流</td><td>细粒度 delta 与 item 生命周期</td><td><code>message.delta</code> 实际一次写入完整结果</td></tr>
+            <tr><td>活动控制</td><td>steer、interrupt、审批请求</td><td>尚无 Turn steer / interrupt / 审批协议</td></tr>
+            <tr><td>上下文</td><td>后续 Turn 追加到可恢复 Thread</td><td>Runtime Thread 暂不复用 Agent history</td></tr>
+            <tr><td>本地安全</td><td>每 Turn 可配置 sandbox / approval</td><td>交互路径额外有 pre/post side-git 快照</td></tr>
+          </tbody>
+        </table>
+
+        <p>架构上最自然的下一步，是让一个统一的 Turn 上下文携带 <code>turnId</code>、<code>threadId</code>、mode、取消令牌、快照边界和事件发布器。现在这些责任散落在 Runtime API、SnapshotService 和 Agent runner 中。</p>
+      </div>
+    </section>
+
+    <section class="section" id="practice">
+      <aside class="section-index"><b>06</b>检索练习</aside>
+      <div>
+        <h2>用一次回忆把概念钉住</h2>
+        <div class="quiz" data-quiz data-explanation="Agent.run() 会在同一 Turn 内持续进行 LLM → Tool → LLM 循环。">
+          <p class="quiz-question">一次 ReAct Turn 内可以发生几次模型调用？</p>
+          <div class="quiz-options">
+            <button type="button" data-answer data-correct="false">只能调用模型一次</button>
+            <button type="button" data-answer data-correct="true">可以调用模型多次</button>
+            <button type="button" data-answer data-correct="false">不会调用任何模型</button>
+          </div>
+          <p class="quiz-feedback" data-feedback aria-live="polite"></p>
+        </div>
+
+        <details>
+          <summary>源码追踪挑战：为什么 Runtime Thread 目前不是真正的对话？</summary>
+          <p>从 <code>RuntimeApiServer.runTurn()</code> 追到 <code>Main.runHeadlessTask()</code>。后者每次都 <code>new ToolRegistry()</code> 和 <code>new Agent(...)</code>，没有从 <code>RuntimeThreadStore</code> 读取历史消息。Store 保存的是 thread 行与 event 行，而不是 Agent conversation history。</p>
+        </details>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>
+        <p class="eyebrow">Next question</p>
+        <h2>接下来可以追 Item</h2>
+        <p>如果 Turn 是一次事务，那么工具调用、文件修改和审批如何成为可观察的 Item？这会自然带你进入事件建模、流式渲染和 HITL 边界。</p>
+        <p>任何地方不清楚，直接继续问我；我会沿着源码调用链解释，而不是只给抽象定义。</p>
+      </div>
+      <p class="meta">
+        <strong>随手复习</strong>
+        打开 <a href="turn-protocol-cheatsheet.html">Turn 协议速查表</a>。
+      </p>
+    </footer>
+  </main>
+</body>
+</html>
