@@ -647,6 +647,11 @@ java -jar target/mini-claude-code-1.0-SNAPSHOT.jar
 
 **通过判定**：任一含 web_search 的步骤块内能找到本步骤 query 的摘要行，且不同块的摘要行不串。若摘要行直接实时打在终端而与并行输出交错，说明 SubAgent 没走缓冲流（回归 40d2d65）。
 
+**2026-08-19 实测**：✅ 通过（含 d2d4840 噪音修复回归）。三搜索任务，总结按 step_1→2→3 有序、
+结果不串；审查链路单行化——`🔍 正在审查` → `⚠️ 未通过` + 反馈 → `🔄 重试 (1/2)` → `✅ 通过`，
+全程无 `code: json` 折叠块、无 reviewer/planner 裸 JSON、无重试全量重放。已知非 bug 瑕疵：
+reviewer 拒绝但 issues 为空时反馈退化为通用文案（parseReviewIssues 兜底）。
+
 ---
 
 ## 通过总判据
