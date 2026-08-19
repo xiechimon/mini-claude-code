@@ -91,6 +91,8 @@ CodeGraph 无结果或只需精确文本匹配时再用 `rg`。避免无目标�
 
 - 本地“当前项目 / 文件 / README / 代码”问题使用本地代码工具，不发起联网搜索。
 - 已知 URL 先 `web_fetch`；SPA、反爬或登录页再使用 Chrome DevTools MCP。
+- `web_search` / `web_fetch` 返回后三条执行路径都会打一行结果摘要；ReAct 走 renderer 流，
+  Plan 走任务输出流，SubAgent 走 step 级缓冲流。
 - 浏览器读取优先 `take_snapshot`；公开页面不提前切 shared 模式。
 - shared 模式下，敏感页面改写操作必须单步审批，`close_page` 只能关闭本会话创建的 tab。
 - MCP 合并用户级和项目级配置；server 全程后台启动，慢 server 保持 `STARTING`，不能阻塞 Logo 和首个输入提示。

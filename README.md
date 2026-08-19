@@ -146,6 +146,8 @@ Mini Claude Code 有三类容易混淆的状态：
 - MCP server 全程后台启动，`npx` 拉包或 Chrome 冷启动不会阻塞 Logo 和首个输入提示；用 `/mcp` 查看实时状态。
 - Skill 只在需要时通过 `load_skill` 展开，避免把全部说明塞进 system prompt。
 - 静态网页优先走 `web_fetch`；SPA、登录页或强交互页面再使用 Chrome DevTools MCP。
+- `web_search` / `web_fetch` 返回后在流式输出里打一行结果摘要（如 `→ 搜索 "xxx" 返回 N 条结果`），
+  ReAct、Plan、Team 三种模式一致。
 - shared 浏览器模式会复用登录态，因此敏感页面上的改写操作必须单步审批。
 
 ## 安全边界
