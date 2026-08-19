@@ -3,6 +3,7 @@ package com.miniclaudecode.pty;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -45,12 +46,15 @@ class FoldBlockTest {
             h.session().expect(
                     Pattern.compile(TRIANGLE + " ReadFile\\(README\\.md\\)"),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
-            // Ctrl+O 展开
+            // 等 turn 完全结束（▪ done）后 readLine 恢复，Ctrl+O 才由 JLine widget 处理
+            // 与手动用例一致：输出完成后按 Ctrl+O 展开最近块
+            h.session().expect(Pattern.compile("done"),
+                    PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            Thread.sleep(400);
             h.session().sendCtrl('O');
             h.session().expect(
                     Pattern.compile(TRIANGLE_DOWN + " collapse \\(ctrl\\+o\\)"),
                     Duration.ofSeconds(10));
-            // 再 Ctrl+O 折回
             h.session().sendCtrl('O');
             h.session().expect(
                     Pattern.compile(TRIANGLE + " ReadFile\\(README\\.md\\)"),

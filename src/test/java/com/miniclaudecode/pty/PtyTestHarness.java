@@ -24,10 +24,15 @@ public final class PtyTestHarness implements AutoCloseable {
     }
 
     public static PtyTestHarness start(StubScript script, String renderer) throws IOException {
-        return start(script, renderer, Map.of());
+        return start(script, renderer, Map.of(), 0);
     }
 
     public static PtyTestHarness start(StubScript script, String renderer, Map<String, String> extraEnv) throws IOException {
+        return start(script, renderer, extraEnv, 0);
+    }
+
+    public static PtyTestHarness start(StubScript script, String renderer, Map<String, String> extraEnv,
+                                       long responseDelayMs) throws IOException {
         String realProject = System.getProperty("user.dir");
 
         // 创建 temp workDir，里面放空 .env 覆盖项目根的 .env，
@@ -52,7 +57,7 @@ public final class PtyTestHarness implements AutoCloseable {
             }
         }
 
-        SseStubServer stub = new SseStubServer(script);
+        SseStubServer stub = new SseStubServer(script, responseDelayMs);
 
         Map<String, String> env = new HashMap<>();
         env.put("MINI_CLAUDE_CODE_RENDERER", renderer);

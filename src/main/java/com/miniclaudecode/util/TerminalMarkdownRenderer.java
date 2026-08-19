@@ -17,6 +17,7 @@ public final class TerminalMarkdownRenderer {
     private static final Pattern UNORDERED_LIST = Pattern.compile("^(\\s*)[-*+]\\s+(.*)$");
     private static final Pattern HEADING = Pattern.compile("^\\s{0,3}(#{1,6})\\s+(.*)$");
     private static final Pattern TABLE_SEPARATOR = Pattern.compile("^\\s*\\|?(\\s*:?-{3,}:?\\s*\\|)+\\s*:?-{3,}:?\\s*\\|?\\s*$");
+    private static final Pattern HORIZONTAL_RULE = Pattern.compile("^ {0,3}(?:(?:-[ \\t]*){3,}|(?:\\*[ \\t]*){3,}|(?:_[ \\t]*){3,})$");
     private static final int COMPACT_TABLE_MAX_CELL_LENGTH = 24;
     private static final int COMPACT_TABLE_MAX_TOTAL_WIDTH = 80;
     private static final int DEFAULT_TERMINAL_COLUMNS = 120;
@@ -191,6 +192,20 @@ public final class TerminalMarkdownRenderer {
 
         flushPendingTable();
 
+        if (HORIZONTAL_RULE.matcher(line).matches()) {
+            renderHorizontalRule();
+            return;
+        }
+
+        // 4 空格缩进代码块（不在 fence 内时）
+        if (!inCodeBlock && line.length() >= 4
+                && line.charAt(0) == ' ' && line.charAt(1) == ' '
+                && line.charAt(2) == ' ' && line.charAt(3) == ' '
+                && !line.isBlank()) {
+            writeLine("    " + line.substring(4), BlockType.CODE_BLOCK);
+            return;
+        }
+
         String trimmed = line.trim();
         if (trimmed.isEmpty()) {
             writeBlankLine();
@@ -223,7 +238,13 @@ public final class TerminalMarkdownRenderer {
         }
 
         if (trimmed.startsWith(">")) {
-            writeLine(AnsiStyle.quotePrefix("│") + " " + sanitizeInline(trimmed.substring(1).trim()), BlockType.QUOTE);
+            int depth = 0;
+            while (depth < trimmed.length() && trimmed.charAt(depth) == '>') {
+                depth++;
+            }
+            String prefix = "│".repeat(depth);
+            writeLine(AnsiStyle.quotePrefix(prefix) + " " + sanitizeInline(trimmed.substring(depth).trim()),
+                    BlockType.QUOTE);
             return;
         }
 
@@ -248,6 +269,13 @@ public final class TerminalMarkdownRenderer {
         writeLine(AnsiStyle.heading(content), BlockType.HEADING);
         char underline = level == 1 ? '=' : '-';
         writeLine(AnsiStyle.subtle(String.valueOf(underline).repeat(Math.max(content.length(), 4))), BlockType.HEADING);
+        writeBlankLine();
+    }
+
+    private void renderHorizontalRule() {
+        ensureBlockSpacing();
+        int width = Math.max(8, Math.min(terminalColumns() - 4, 40));
+        writeLine(AnsiStyle.subtle("─".repeat(width)), BlockType.PARAGRAPH);
         writeBlankLine();
     }
 
@@ -484,21 +512,72 @@ public final class TerminalMarkdownRenderer {
         needsLineBreakBeforeNextBlock = false;
     }
 
+    private static final String ANSI_BOLD = "[1m";
+    private static final String ANSI_ITALIC = "[3m";
+    private static final String ANSI_RESET = "[0m";
+    private static final String ANSI_DIM_URL = "[2;37m";
+    private static final String ANSI_INLINE_CODE = "[33m";
+
+    // 转义占位符：\X 的 X 换成私有区字符，跑完 markdown 正则后再还原
+    private static final String ESCAPED_MARKERS = "*_`~[]()<>\\#";
+
     private String sanitizeInline(String value) {
         if (value == null || value.isEmpty()) {
             return "";
         }
 
-        String sanitized = value
-                .replace("**", "")
-                .replace("__", "")
-                .replace("`", "")
-                .replace("~~", "")
-                .replace("*", "")
-                .replace("_", "");
+        StringBuilder escaped = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\\' && i + 1 < value.length() && ESCAPED_MARKERS.indexOf(value.charAt(i + 1)) >= 0) {
+                escaped.append(placeholderFor(value.charAt(i + 1)));
+                i++;
+                continue;
+            }
+            escaped.append(c);
+        }
+        String s = escaped.toString();
 
-        sanitized = sanitized.replaceAll("\\[(.+?)]\\((.+?)\\)", "$1");
-        return sanitized.stripTrailing();
+        boolean color = AnsiStyle.isEnabled();
+        String bold = color ? ANSI_BOLD : "";
+        String italic = color ? ANSI_ITALIC : "";
+        String reset = color ? ANSI_RESET : "";
+        String codeColor = color ? ANSI_INLINE_CODE : "";
+        String dimUrl = color ? ANSI_DIM_URL : "";
+
+        s = s.replaceAll("\\*\\*(.+?)\\*\\*", bold + "$1" + reset);
+        s = s.replaceAll("__(.+?)__", bold + "$1" + reset);
+        s = s.replaceAll("~~(.+?)~~", "[~$1~]");
+        s = s.replaceAll("`([^`]+)`", codeColor + "$1" + reset);
+        s = s.replaceAll("(?<![\\w\\u4e00-\\u9fa5])\\*([^*\\n]+?)\\*(?![\\w\\u4e00-\\u9fa5])",
+                italic + "$1" + reset);
+        // italic _text_：词边界限制，snake_case 不吃
+        s = s.replaceAll("\\b_(?!\\s)([^_\\n]+?)_(?!\\s)\\b", italic + "$1" + reset);
+
+        // 链接 [text](url) → text (url)
+        s = s.replaceAll("\\[([^\\]]+)]\\(([^)]+)\\)", "$1 (" + dimUrl + "$2" + reset + ")");
+
+        // 还原转义占位符为字面字符
+        StringBuilder restored = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            restored.append(restorePlaceholder(s.charAt(i)));
+        }
+        return restored.toString().stripTrailing();
+    }
+
+    private static char placeholderFor(char marker) {
+        return (char) (0xE000 + ESCAPED_MARKERS.indexOf(marker));
+    }
+
+    private static char restorePlaceholder(char c) {
+        if (c >= 0xE000 && c < 0xE000 + ESCAPED_MARKERS.length()) {
+            return ESCAPED_MARKERS.charAt(c - 0xE000);
+        }
+        return c;
+    }
+
+    private static String ansiWrap(String prefix, String groupRef) {
+        return prefix + groupRef + ANSI_RESET;
     }
 
     private String padRight(String value, int width) {

@@ -16,6 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HitlApprovalTest {
 
     private static final String HITL_PROMPT = "需要审批";
+    /**
+     * HITL hint 行用 out.print 无换行，line-based reader 看不到；
+     * 只能静置等 readSingleKey 进入 raw mode，过早按键会被 activity 轮询吞掉
+     */
+    private void awaitApprovalReady(PtyTestHarness h) throws Exception {
+        Thread.sleep(500);
+    }
     private static final String WRITE_FILE_HAPPY = "{\"path\":\"hello.txt\",\"content\":\"hi\"}";
 
     @Test
@@ -27,6 +34,7 @@ class HitlApprovalTest {
             // 等待 HITL 审批框
             h.session().expect(Pattern.compile(HITL_PROMPT),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            awaitApprovalReady(h);
             // 按 y 批准
             h.session().sendRaw((byte) 'y');
             // 应创建文件
@@ -42,6 +50,7 @@ class HitlApprovalTest {
             h.session().send("创建 dangerous.sh");
             h.session().expect(Pattern.compile(HITL_PROMPT),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            awaitApprovalReady(h);
             // 按 n 拒绝 → readSingleKey 读 'n' → promptForReason() 调 stdinReader.readLine()
             // 我们不能等 "拒绝原因" 文本因为 readLine 已阻塞在 PTY 输入
             h.session().sendRaw((byte) 'n');
@@ -84,6 +93,7 @@ class HitlApprovalTest {
             // 第一次 HITL 提示
             h.session().expect(Pattern.compile(HITL_PROMPT),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            awaitApprovalReady(h);
             // 按 a 全部放行
             h.session().sendRaw((byte) 'a');
             // 等所有文件创建
@@ -103,6 +113,7 @@ class HitlApprovalTest {
             h.session().send("执行 echo hello");
             h.session().expect(Pattern.compile(HITL_PROMPT),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            awaitApprovalReady(h);
             int before = h.stub().requestCount();
             // 按 s 跳过
             h.session().sendRaw((byte) 's');
@@ -125,6 +136,7 @@ class HitlApprovalTest {
             h.session().send("创建 renamed.txt 写 modified");
             h.session().expect(Pattern.compile(HITL_PROMPT),
                     PtyTestHarness.LLM_RESPONSE_TIMEOUT);
+            awaitApprovalReady(h);
             // 按 m 修改参数
             h.session().sendRaw((byte) 'm');
             // 等待 JSON 输入提示
@@ -138,9 +150,9 @@ class HitlApprovalTest {
 
     private void enableHitl(PtyTestHarness h) throws Exception {
         h.session().send("/hitl on");
-        // 等待 HITL 启用确认
         h.session().expect(Pattern.compile("HITL 审批已启用|HITL ON|hitl.*on"),
                 Duration.ofSeconds(10));
+        Thread.sleep(300);
     }
 
     private void verifyFileCreated(PtyTestHarness h, String name) throws Exception {

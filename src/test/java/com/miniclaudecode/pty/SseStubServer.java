@@ -21,10 +21,19 @@ public final class SseStubServer implements AutoCloseable {
     private final HttpServer server;
     private final int port;
     private final StubScript script;
+    private final long responseDelayMs;
     private final AtomicInteger requestIndex = new AtomicInteger(0);
 
     public SseStubServer(StubScript script) throws IOException {
+        this(script, 0);
+    }
+
+    /**
+     * @param responseDelayMs 每次响应前的延迟，用于拉开多轮间隔让测试有操作窗口
+     */
+    public SseStubServer(StubScript script, long responseDelayMs) throws IOException {
         this.script = script;
+        this.responseDelayMs = responseDelayMs;
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         this.server.createContext("/v1/chat/completions", new ChatHandler());
         this.server.setExecutor(null);
@@ -54,6 +63,14 @@ public final class SseStubServer implements AutoCloseable {
         public void handle(HttpExchange exchange) throws IOException {
             // 读取请求体（消费即可）
             byte[] body = exchange.getRequestBody().readAllBytes();
+
+            if (responseDelayMs > 0) {
+                try {
+                    Thread.sleep(responseDelayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
 
             int idx = requestIndex.getAndIncrement();
             StubScript.Turn turn = script.turn(idx);
