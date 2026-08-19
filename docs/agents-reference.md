@@ -158,9 +158,10 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 - 返回结果保持原始顺序
 - Agent/PlanExecuteAgent/SubAgent 三条路径都走 executeTools ()
 - 三条路径不直接调 `executeTools()`，统一经 `agent/ToolCallRunner.execute()`：翻译 ToolInvocation、统一
-  `[scope]` 日志口径（scope 依次是 `iteration=N` / `task <id>` / 子 agent 名）、按原顺序回调 `onResult`。ReAct 用
-  `onResult` 挂 `emitToolResultSummary()`，另两条传 null
+  `[scope]` 日志口径（scope 依次是 `iteration=N` / `task <id>` / 子 agent 名）、按原顺序回调 `onResult`
 - 返回图片的工具结果统一由 `ToolCallRunner.appendImageMessages()` 补成一条 user message
+- `web_search` / `web_fetch` 的单行结果摘要由 `agent/ToolResultSummaries` 统一产出，三条路径都挂：ReAct 传
+  `renderer().stream()`，Plan 传任务输出流，SubAgent 传 step 级缓冲流（并行步骤摘要不交错）
 
 ### Web
 

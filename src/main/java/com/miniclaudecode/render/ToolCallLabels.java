@@ -47,7 +47,7 @@ public final class ToolCallLabels {
             case "web_search" -> "🌐 联网搜索 " + count + " 次";
             case "web_fetch" -> "📰 抓取 " + count + " 个网页";
             case "save_memory" -> "💾 保存长期记忆 " + count + " 条";
-            default -> toolName != null && toolName.startsWith("mcp__")
+            default -> toolName.startsWith("mcp__")
                     ? formatMcpLabel(toolName, count)
                     : "🔧 " + toolName + " × " + count;
         };

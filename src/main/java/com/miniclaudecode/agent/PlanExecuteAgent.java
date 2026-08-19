@@ -474,7 +474,8 @@ public class PlanExecuteAgent {
             streamRenderer.resetBetweenIterations();
 
             List<ToolExecutionResult> toolResults = ToolCallRunner.execute(
-                    log, "task " + task.getId(), toolRegistry, response.toolCalls(), null);
+                    log, "task " + task.getId(), toolRegistry, response.toolCalls(),
+                    ToolResultSummaries.forStream(out));
             for (ToolExecutionResult toolResult : toolResults) {
                 memoryManager.addToolResult(toolResult.name(), toolResult.result());
                 allResults.append(toolResult.result()).append("\n");

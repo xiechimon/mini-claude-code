@@ -224,7 +224,8 @@ public class SubAgent {
                     streamRenderer.resetBetweenIterations();
 
                     List<ToolExecutionResult> toolResults = ToolCallRunner.execute(
-                            log, name, toolRegistry, response.toolCalls(), null);
+                            log, name, toolRegistry, response.toolCalls(),
+                            ToolResultSummaries.forStream(out));
                     for (ToolExecutionResult toolResult : toolResults) {
                         conversationHistory.add(LlmClient.Message.tool(toolResult.id(), toolResult.result()));
                     }
