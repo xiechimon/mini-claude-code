@@ -165,7 +165,9 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
 
 ### Web
 
-- `web_search`：SearchProvider 接口，返回 SearchResult 列表
+- `web_search`：SearchProvider 接口，返回 SearchResult 列表。默认 provider 是 anysearch
+  （`ANYSEARCH_API_KEY` 走付费额度，无 Key 走匿名免费档，恒 ready）；zhipu / serpapi / searxng
+  保留为显式 `SEARCH_PROVIDER` 选项，GLM Key 不再自动选中 zhipu
 - `web_fetch`：NetworkPolicy → WebFetcher → HtmlExtractor，SPA/防爬墙返回空正文 + 边界提示
 - 联网决策由模型通过原生 tool call 自主发起；Prompt 不包含 Freshness Policy，不强制 `web_search`。本地“当前项目/当前
   README/当前文件/当前代码”仍作为代码库任务交给模型在工具 schema 中选择本地工具。

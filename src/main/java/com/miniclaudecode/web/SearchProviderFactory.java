@@ -11,15 +11,11 @@ import java.util.Locale;
 /**
  * 按环境变量 / .env / 系统属性选择 SearchProvider 实现
  * <p>
- * 自动选择优先级（未显式 SEARCH_PROVIDER 时）：
- * <ol>
- *   <li>有 {@code GLM_API_KEY} → zhipu（智谱 Web Search，与 GLM 推理共用 Key，国内首选）</li>
- *   <li>有 {@code SERPAPI_KEY} → serpapi（国际通用，付费即开即用）</li>
- *   <li>有 {@code SEARXNG_URL} → searxng（开源自托管，免费）</li>
- *   <li>都没有 → 占位 zhipu provider，isReady() 为 false，由调用方提示用户</li>
- * </ol>
+ * 默认 provider 是 anysearch：配置 {@code ANYSEARCH_API_KEY} 走付费额度，
+ * 无 Key 走匿名免费档，因此默认链路在任何配置下都可用
  * <p>
- * 显式 {@code SEARCH_PROVIDER}（zhipu / serpapi / searxng）会跳过自动判断
+ * 显式 {@code SEARCH_PROVIDER}（anysearch / zhipu / serpapi / searxng）会跳过默认，
+ * GLM Key 用户想继续用智谱搜索需显式声明 zhipu
  * <p>
  * 这里不做单例缓存，由调用方按需缓存（如 ToolRegistry 的 webSearchProvider 字段）
  */
@@ -32,35 +28,28 @@ public final class SearchProviderFactory {
 
     public static SearchProvider create() {
         String provider = readEnv("SEARCH_PROVIDER");
+        String anyKey = readEnv("ANYSEARCH_API_KEY");
         String glmKey = readEnv("GLM_API_KEY");
         String zhipuEngine = readEnv("ZHIPU_SEARCH_ENGINE");
         String serpKey = readEnv("SERPAPI_KEY");
         String searxngUrl = readEnv("SEARXNG_URL");
 
-        String chosen = pickProvider(provider, glmKey, serpKey, searxngUrl);
+        String chosen = pickProvider(provider);
         log.info("SearchProvider chosen: {}", chosen);
 
         return switch (chosen) {
-            case "searxng" -> new SearxngSearchProvider(searxngUrl);
+            case "zhipu" -> new ZhipuSearchProvider(glmKey, zhipuEngine);
             case "serpapi" -> new SerpApiSearchProvider(serpKey);
-            default -> new ZhipuSearchProvider(glmKey, zhipuEngine);
+            case "searxng" -> new SearxngSearchProvider(searxngUrl);
+            default -> new AnySearchProvider(anyKey);
         };
     }
 
-    static String pickProvider(String explicit, String glmKey, String serpKey, String searxngUrl) {
+    static String pickProvider(String explicit) {
         if (explicit != null && !explicit.isBlank()) {
             return explicit.trim().toLowerCase(Locale.ROOT);
         }
-        if (glmKey != null && !glmKey.isBlank()) {
-            return "zhipu";
-        }
-        if (serpKey != null && !serpKey.isBlank()) {
-            return "serpapi";
-        }
-        if (searxngUrl != null && !searxngUrl.isBlank()) {
-            return "searxng";
-        }
-        return "zhipu"; // 无可用配置时返回 isReady() 为 false 的占位 provider
+        return "anysearch"; // 匿名档可用，无需占位 provider
     }
 
     private static String readEnv(String key) {

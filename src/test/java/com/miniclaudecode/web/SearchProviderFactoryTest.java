@@ -7,40 +7,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class SearchProviderFactoryTest {
 
     @Test
-    void explicitProviderOverridesAutoDetect() {
-        assertEquals("zhipu", SearchProviderFactory.pickProvider("zhipu", null, "key", "http://localhost"));
-        assertEquals("searxng", SearchProviderFactory.pickProvider("searxng", "glm", "key", "http://localhost"));
-        assertEquals("serpapi", SearchProviderFactory.pickProvider("serpapi", null, null, "http://localhost"));
+    void explicitProviderWinsForAllSupportedNames() {
+        assertEquals("anysearch", SearchProviderFactory.pickProvider("anysearch"));
+        assertEquals("zhipu", SearchProviderFactory.pickProvider("ZHIPU"));
+        assertEquals("searxng", SearchProviderFactory.pickProvider("searxng"));
+        assertEquals("serpapi", SearchProviderFactory.pickProvider("serpapi"));
     }
 
     @Test
-    void autoSelectsZhipuWhenGlmKeyPresent() {
-        // GLM_API_KEY 在自动选择中优先
-        assertEquals("zhipu", SearchProviderFactory.pickProvider(null, "glm-key", null, null));
-        assertEquals("zhipu", SearchProviderFactory.pickProvider(null, "glm-key", "serp-key", "http://localhost"));
+    void blankExplicitFallsBackToAnySearch() {
+        assertEquals("anysearch", SearchProviderFactory.pickProvider(null));
+        assertEquals("anysearch", SearchProviderFactory.pickProvider(""));
+        assertEquals("anysearch", SearchProviderFactory.pickProvider("   "));
     }
 
     @Test
-    void autoSelectsSerpapiWhenOnlySerpKeyPresent() {
-        assertEquals("serpapi", SearchProviderFactory.pickProvider(null, null, "any-key", null));
-        assertEquals("serpapi", SearchProviderFactory.pickProvider("", "", "any-key", null));
-    }
-
-    @Test
-    void autoSelectsSearxngWhenOnlyUrlPresent() {
-        assertEquals("searxng", SearchProviderFactory.pickProvider(null, null, null, "http://localhost:8888"));
-        assertEquals("searxng", SearchProviderFactory.pickProvider(null, "", "", "http://localhost:8888"));
-    }
-
-    @Test
-    void fallsBackToZhipuPlaceholder() {
-        assertEquals("zhipu", SearchProviderFactory.pickProvider(null, null, null, null));
-    }
-
-    @Test
-    void normalizesExplicitToLowercase() {
-        assertEquals("searxng", SearchProviderFactory.pickProvider("SEARXNG", null, null, null));
-        assertEquals("serpapi", SearchProviderFactory.pickProvider("  SerpAPI  ", null, null, null));
-        assertEquals("zhipu", SearchProviderFactory.pickProvider("ZHIPU", null, null, null));
+    void createDefaultsToAnySearchImplementation() {
+        // 无任何环境干预时拿到 AnySearchProvider，且匿名档即 ready
+        SearchProvider provider = SearchProviderFactory.create();
+        assertEquals("anysearch", provider.name());
+        org.junit.jupiter.api.Assertions.assertTrue(provider.isReady());
     }
 }

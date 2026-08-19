@@ -90,6 +90,7 @@ CodeGraph 无结果或只需精确文本匹配时再用 `rg`。避免无目标�
 ### Web、Browser 与 MCP
 
 - 本地“当前项目 / 文件 / README / 代码”问题使用本地代码工具，不发起联网搜索。
+- `web_search` 默认 provider 是 anysearch（无 Key 走匿名免费档，恒可用）；zhipu / serpapi / searxng 为显式选项。
 - 已知 URL 先 `web_fetch`；SPA、反爬或登录页再使用 Chrome DevTools MCP。
 - `web_search` / `web_fetch` 返回后三条执行路径都会打一行结果摘要；ReAct 走 renderer 流，
   Plan 走任务输出流，SubAgent 走 step 级缓冲流。
