@@ -249,7 +249,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire-plugin.version}</version>
                 <configuration>
-                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                    <argLine>-Dfile.encoding=UTF-8 -Djava.awt.headless=true</argLine>
                     <skipTests>${skipTests}</skipTests>
                 </configuration>
             </plugin>
