@@ -347,6 +347,11 @@ public final class InlineRenderer implements Renderer {
             out.print(AnsiStyle.CLEAR_SCREEN);
             out.flush();
         }
+        // 必须在打印 banner 之前重画：Status.reset() 会把 scrollRegion 先退回整屏再重新收窄，
+        // 这个"收窄"动作本身会向下滚动几行；放在空屏上滚动无害，放在 banner 打印之后会把 banner 卷走
+        if (statusBar != null) {
+            statusBar.redrawAfterExternalClear();
+        }
         LineReader reader = lineReader;
         String joined = joinLines(List.copyOf(lines));
         if (reader != null && started && !closed) {
@@ -356,10 +361,6 @@ public final class InlineRenderer implements Renderer {
                 out.print(joined);
                 out.flush();
             }
-        }
-        // CLEAR_SCREEN 同样抹掉了 JLine Status 保留行，banner 打完必须整幅重画底栏
-        if (statusBar != null) {
-            statusBar.redrawAfterExternalClear();
         }
     }
 

@@ -430,6 +430,11 @@ class InlineRendererTest {
             int statusIdx = emitted.indexOf("Auto Model", clearIdx);
             assertTrue(statusIdx > clearIdx,
                     "\u6e05\u5c4f\u540e\u5e94\u91cd\u7ed8\u5e95\u680f\uff0c\u672a\u5728\u6e05\u5c4f\u5e8f\u5217\u4e4b\u540e\u627e\u5230 Auto Model: " + emitted);
+            int bannerIdx = emitted.indexOf("Mini Claude Code", statusIdx);
+            assertTrue(bannerIdx > statusIdx,
+                    "\u5e95\u680f\u91cd\u753b\u5305\u542b\u6536\u7a84 scroll region \u7684\u6eda\u52a8\u52a8\u4f5c\uff0c"
+                            + "\u5fc5\u987b\u5728 banner \u6253\u5370\u4e4b\u524d\u5b8c\u6210\uff0c\u5426\u5219\u4f1a\u628a"
+                            + "\u521a\u6253\u5370\u7684 banner \u5377\u8d70: " + emitted);
         } finally {
             renderer.close();
         }
