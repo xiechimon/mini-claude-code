@@ -250,6 +250,7 @@ public class Main {
             }
             boolean nextTaskUsePlanMode = false;
             boolean nextTaskUseTeamMode = false;
+            CtrlCExitGuard ctrlCExitGuard = new CtrlCExitGuard();
 
             // 兼容旧 MINI_CLAUDE_CODE_TUI=true，Lanterna 成功启动后不进入 CLI 循环
             if (com.miniclaudecode.tui.TuiBootstrap.shouldUseTui(terminal)) {
@@ -284,13 +285,28 @@ public class Main {
                     promptInput = readPromptInput(terminal, lineReader, renderer,
                             nextTaskUsePlanMode || nextTaskUseTeamMode, spaciousPrompt);
                 } catch (UserInterruptException e) {
-                    continue;  // Ctrl+C 跳过
+                    if (terminal instanceof org.jline.terminal.impl.DumbTerminal) {
+                        // 非交互终端（管道/重定向输入）下，字节流可能偶然包含连续两个 0x03，
+                        // 双击退出语义在这种场景没有真实按键意图，维持原有的无害 continue
+                        continue;
+                    }
+                    switch (ctrlCExitGuard.onInterrupt(e.getPartialLine(), System.nanoTime())) {
+                        case EXIT -> {
+                            exitApplication(ui, wechatRuntime, renderer);
+                            return;
+                        }
+                        case ARMED -> ui.println("再按一次 Ctrl+C 退出");
+                        case SILENT -> {
+                        }
+                    }
+                    continue;
                 } catch (EndOfFileException e) {
                     break;  // Ctrl+D 退出
                 }
                 if (renderer instanceof InlineRenderer inline) {
                     inline.clearAcceptedInput(promptInput.text());
                 }
+                ctrlCExitGuard.onPromptRoundCompleted();
 
                 if (promptInput.canceled()) {
                     if (nextTaskUsePlanMode) {
@@ -324,9 +340,7 @@ public class Main {
                         continue;
                     }
                     case EXIT -> {
-                        ui.println("\n👋 再见!");
-                        wechatRuntime.stop();
-                        renderer.close();
+                        exitApplication(ui, wechatRuntime, renderer);
                         return;
                     }
                     case CANCEL -> {
@@ -760,14 +774,18 @@ public class Main {
                     ui.println();
                 }
             }
-            ui.println("\n👋 再见!");
-            wechatRuntime.stop();
-            renderer.close();
+            exitApplication(ui, wechatRuntime, renderer);
 
         } catch (IOException e) {
             System.err.println("❌ 终端初始化失败: " + e.getMessage());
             System.exit(1);
         }
+    }
+
+    private static void exitApplication(PrintStream ui, WechatRuntimeController wechatRuntime, Renderer renderer) {
+        ui.println("\n👋 再见!");
+        wechatRuntime.stop();
+        renderer.close();
     }
 
     private static boolean isRuntimeServeCommand(String[] args) {
@@ -2751,6 +2769,38 @@ public class Main {
 
         static PromptInput canceledInput() {
             return new PromptInput("", true);
+        }
+    }
+
+    /**
+     * 空闲 prompt 上 Ctrl+C 双击退出的状态机：非空行按下只清空（JLine 已自动清空 buffer，
+     * 这里只是不计入武装），空行上 1 秒内二次按下才退出；只要 readPromptInput 正常返回
+     * 一轮（不管是取消 Plan/Team、空行还是真正提交了命令），都会清零武装状态
+     */
+    static final class CtrlCExitGuard {
+        private static final long WINDOW_NANOS = TimeUnit.SECONDS.toNanos(1);
+
+        private boolean armed;
+        private long armedAtNanos;
+
+        enum Result { EXIT, ARMED, SILENT }
+
+        Result onInterrupt(String partialLine, long nowNanos) {
+            if (partialLine != null && !partialLine.isEmpty()) {
+                armed = false;
+                return Result.SILENT;
+            }
+            if (armed && nowNanos - armedAtNanos <= WINDOW_NANOS) {
+                armed = false;
+                return Result.EXIT;
+            }
+            armed = true;
+            armedAtNanos = nowNanos;
+            return Result.ARMED;
+        }
+
+        void onPromptRoundCompleted() {
+            armed = false;
         }
     }
 

@@ -244,6 +244,11 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
   输出流，避免绕过 inline renderer 直接写 stdout
 - `CodeIndex` 通过 `ProgressListener` 上报索引开始 / 文件数量 / 进度 / 完成或失败，`/index` 绑定当前 renderer 输出流；内部异常细节写
   logger
+- 空闲 prompt 上 Ctrl+C 是双击退出：空行时第一次按下武装并打印提示，1 秒内再按一次才真正退出；非空行按下只清空该行（JLine
+  自动清空 buffer），不计入武装；期间只要 `readPromptInput` 正常返回过一轮（取消 Plan/Team、空行回车、真正提交命令都算），
+  武装状态就清零，见 `Main.CtrlCExitGuard`。任务执行中的 Ctrl+C 是另一条独立路径（raw mode 保留 ISIG 的硬退出阀，见
+  `runWithCancelSupport`），不受此状态机影响，取消任务走 ESC。`terminal` 是 `DumbTerminal`（管道 / 重定向输入等非交互
+  场景）时直接跳过双击退出状态机，维持原有的无害 continue——避免字节流偶然连续出现两个 0x03 时误触发退出
 
 JLine 交互约束（设计记录见 `docs/phase-22-jline-interaction-upgrade.md`）：
 

@@ -116,6 +116,8 @@ java -jar target/mini-claude-code-1.0-SNAPSHOT.jar
 
 斜杠命令由 CLI 层解析；未识别的 `/xxx` 会直接报错，不会偷偷交给 Agent。
 
+空闲 prompt 上退出可以 `Ctrl+D`，或在空行连按两次 `Ctrl+C`（1 秒内）；非空行按 `Ctrl+C` 只清空当前输入，不计入退出计数。
+
 ## 计划审阅
 
 `/plan` 生成 DAG 之后会先停下等确认，不会直接执行：
