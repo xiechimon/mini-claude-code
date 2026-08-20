@@ -229,7 +229,9 @@ Step provider 已移除，该分支目前不可达，`step_search` 的两个工�
   cwd。关键字段可用 JLine `AttributedString` 做克制彩色高亮，但纯文本格式和列宽裁剪仍要稳定。`ctx` 只表示当前仍会带入下一轮请求的上下文估算，
   `in/out/cache` 表示最近任务调用统计。
 - `/clear` 清空当前 ReAct conversationHistory、shortTermMemory 和待注入 SkillContextBuffer，并重建不含上一轮检索记忆的
-  system prompt；长期记忆条目保留，后续只会按新查询重新检索注入。
+  system prompt；长期记忆条目保留，后续只会按新查询重新检索注入。清屏重放 banner 后必须 `redrawAfterExternalClear()`
+  整幅重画底栏：整屏清除会抹掉 JLine Status 保留行，且 Status 内部 Display 的 diff 缓存仍认为旧底栏在屏上，普通
+  update 会被判定无变化而跳过。
 - `/compact` 手动压缩当前 ReAct conversationHistory，压缩期间显示动态 activity 面板，成功后刷新底部 ctx；不会清空
   shortTermMemory、长期记忆或待注入 SkillContextBuffer。
 - `/export` 导出当前 ReAct conversationHistory 为 Markdown 到 `~/.mini-claude-code/exports/session-*.md`；包含完整 system

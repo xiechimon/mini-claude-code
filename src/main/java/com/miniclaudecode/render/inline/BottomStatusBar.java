@@ -394,6 +394,20 @@ public final class BottomStatusBar implements AutoCloseable {
     }
 
     /**
+     * 外部清屏序列（如 /clear 重放 banner 的 CLEAR_SCREEN）抹掉 JLine Status 保留行后调用
+     * Status 的 Display 缓存仍认为旧内容在屏上，直接 update 会因 diff 为空跳过重绘，
+     * 必须先 reset 清掉缓存再整幅重画，并重建滚动区域
+     */
+    public void redrawAfterExternalClear() {
+        Status dock = status;
+        if (dock == null || closed || !started) {
+            return;
+        }
+        dock.reset();
+        renderDock();
+    }
+
+    /**
      * 在即将读取输入时刷新 JLine dock；光标和输入行位置由 LineReader 管理
      */
     public void prepareInputLine() {

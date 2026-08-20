@@ -7,12 +7,15 @@ import com.miniclaudecode.render.StatusInfo;
 import org.jline.reader.LineReader;
 import org.jline.terminal.Size;
 import org.jline.terminal.Terminal;
+import org.jline.terminal.Terminal.SignalHandler;
+import org.jline.terminal.impl.ExternalTerminal;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.ByteArrayInputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -401,4 +404,35 @@ class InlineRendererTest {
             renderer.close();
         }
     }
+
+    @Test
+    void showStartupScreenAgainRedrawsStatusBarAfterClear() throws Exception {
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        // 用纯 Java ExternalTerminal 避免真实 pty；type 决定 terminfo 能力
+        Terminal terminal = new ExternalTerminal(
+                null, "test", "xterm-256color",
+                new ByteArrayInputStream(new byte[0]),
+                new PrintStream(sink, true, StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8, SignalHandler.SIG_DFL);
+        terminal.setSize(new Size(120, 40));
+        InlineRenderer renderer = new InlineRenderer(terminal,
+                new PrintStream(sink, true, StandardCharsets.UTF_8));
+        try {
+            renderer.start();
+            renderer.updateStatus(StatusInfo.idle("glm-5.1", 200_000L, false));
+
+            sink.reset();
+            renderer.showStartupScreenAgain(List.of("Mini Claude Code", "\u9879\u76ee\u76ee\u5f55: /tmp"));
+
+            String emitted = sink.toString(StandardCharsets.UTF_8);
+            int clearIdx = emitted.indexOf("\u001B[2J");
+            assertTrue(clearIdx >= 0, "\u5e94\u53d1\u51fa\u6e05\u5c4f\u5e8f\u5217: " + emitted);
+            int statusIdx = emitted.indexOf("Auto Model", clearIdx);
+            assertTrue(statusIdx > clearIdx,
+                    "\u6e05\u5c4f\u540e\u5e94\u91cd\u7ed8\u5e95\u680f\uff0c\u672a\u5728\u6e05\u5c4f\u5e8f\u5217\u4e4b\u540e\u627e\u5230 Auto Model: " + emitted);
+        } finally {
+            renderer.close();
+        }
+    }
+
 }

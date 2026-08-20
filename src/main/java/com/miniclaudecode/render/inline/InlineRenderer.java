@@ -357,6 +357,10 @@ public final class InlineRenderer implements Renderer {
                 out.flush();
             }
         }
+        // CLEAR_SCREEN 同样抹掉了 JLine Status 保留行，banner 打完必须整幅重画底栏
+        if (statusBar != null) {
+            statusBar.redrawAfterExternalClear();
+        }
     }
 
     /**
